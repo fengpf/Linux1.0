@@ -59,4 +59,4 @@ dkms.conf
 .idea/
 cmake-build-debug/
 CMakeLists.txt
-./img
+img/
