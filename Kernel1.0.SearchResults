@@ -1,7 +1,0 @@
----- do_bottom_half Matches (6 in 4 files) ----
-Irq.c (kernel): * do_bottom_half() runs at normal kernel priority: all interrupts
-Irq.c (kernel): * enabled.  do_bottom_half() is atomic with respect to itself: a
-Irq.c (kernel):asmlinkage void do_bottom_half(void)
-Loopback.c (net\inet):		"call _do_bottom_half\n\t"
-Sched.c (kernel):/* 通过do_bottom_half调用到此处，处理内核时钟 */
-sys_call.S (kernel):	call _do_bottom_half
