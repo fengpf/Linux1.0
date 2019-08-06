@@ -1,0 +1,17 @@
+This is a packet used for debugging Linux kernel 0.11 by using Bochs
+and gdb. In the X window environment, open two terminal consoles, and 
+in one terminal change working directory to linux-gdb/ and run "./run".
+In the other terminal window change to directory linux-gdb/linux/ and 
+run the command "gdb tools/system". For details, see the associated ebook. 
+
+
+BTW: If you comment out the following line in the bochsrc-fd1-gdb.bxrc:
+
+gdbstub: enabled=1, port=1234, text_base=0, data_base=0, bss_base=0
+
+the Linux 0.11 system will be run in normal case.
+
+
+Jiong Zhao (gohigh@sh163.net, gohigh@gmail.com)
+Jun 18, 2005
+

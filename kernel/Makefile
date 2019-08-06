@@ -6,7 +6,10 @@ LD = ld
 LIB = -I lib/ -I lib/kernel/ -I lib/user/ -I kernel/ -I device/ -I thread/ -I userprog/
 ASFLAGS = -f elf
 
-CFLAGS = -Wall $(LIB) -c -fno-builtin -W -Wstrict-prototypes \
+#  原因: 这是因为本机系统为64位，
+#  因此需要给所有Makefile中的as命令加上 --32 选项。
+#  需给所有Makefile中的CFLAGS加上 -m32 选项。
+CFLAGS = -m32 -Wall $(LIB) -c -fno-builtin -W -Wstrict-prototypes \
          -Wmissing-prototypes -fno-stack-protector -z execstack
 
 LDFLAGS = -Ttext $(ENTRY_POINT) -e main -Map $(BUILD_DIR)/kernel.map
@@ -144,11 +147,11 @@ $(BUILD_DIR)/kernel.bin: $(OBJS)
 
 hd:
 	dd if=$(BUILD_DIR)/kernel.bin \
-           of=/data/app/c/linux-mini/kernel/img/bochs/hd60M.img \
+           of=/data/app/c/linux-mini/img/bochs/hd60M.img \
            bs=512 count=200 seek=9 conv=notrunc
 
 hdgdb:
-	dd if=$(BUILD_DIR)/kernel.bin of=/data/app/c/linux-mini/kernel/img/bochsgdb/hd60M.img bs=512 count=200 seek=9 conv=notrunc
+	dd if=$(BUILD_DIR)/kernel.bin of=/data/app/c/linux-mini/img/bochsgdb/hd60M.img bs=512 count=200 seek=9 conv=notrunc
 
 clean:
 	@cd $(BUILD_DIR) && rm -f ./*.bin ./*.o
