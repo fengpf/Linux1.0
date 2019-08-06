@@ -7,11 +7,11 @@
 #
 
 AR	=ar
-AS	=as
+AS	=nasm
 LD	=ld
 LDFLAGS	=-x #-s
-CC	=gcc -mcpu=i386
-CFLAGS	=-Wall -O -g -fstrength-reduce -fomit-frame-pointer  \
+CC	=gcc -march=i386
+CFLAGS	= -m32 -Wall -O -g -fstrength-reduce -fomit-frame-pointer  \
 	-finline-functions -nostdinc -I../../include
 CPP	=gcc -E -nostdinc -I../../include
 

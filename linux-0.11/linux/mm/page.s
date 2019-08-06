@@ -8,7 +8,7 @@
  * page.s contains the low-level page-exception code.
  * the real work is done in mm.c
  */
-
+.code32
 .globl page_fault
 
 page_fault:

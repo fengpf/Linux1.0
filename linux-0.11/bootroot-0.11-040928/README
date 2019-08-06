@@ -1,0 +1,56 @@
+A integrated bootimage file 'bootroot-0.11', which also contains a simple 
+small root file system. That is to say you can boot and run the Linux 0.11 
+system with only one disk image file. For the theory related, read the 
+Linux 0.11 kernel source files kernel/blk_drv/ramdisk.c and fs/super.c
+
+http://oldlinux.org/
+Jiong Zhao (gohigh@sh163.net)
+2004.09.28 (The chinese mid-autumn festival)
+
+
+Files descriptions
+==================
+
+bootroot-0.11	The bootimage file containning a little rootfs with 1024KB
+		in size and started from diskblock 256.
+		
+bochsrc-rd.bxrc	The bochs configuration file for the above image file.
+
+parts/		This directory contains two files, bootimage-rd and 
+		rootimage-small, used to assemble and create the 
+		bootroot image file. 
+		
+Simple description for creating the bootroot image file.
+========================================================
+1. Copy the two files in parts/ directory into the linux-0.11-devel-XXXXXX/.
+   Use bochs imagetools or WinImage to create a empty 1.44MB image file and 
+   named it as 'bootroot-0.11'
+2. Run the linux-0.11-devel sytem in bochs. Input the following two files 
+   into the hd image using the metohed mentioned in chapter 14 in the book.
+       bootimage-rd  
+       rootimage-small 
+   Notice that, you can also built these two files by your own. To geneate the
+   bootimage-rd image file, modify the Makefile in /usr/src/linux. Change the 
+   two line as bellow:
+       RAMDISK = -DRAMDISK=2048
+       ROOT_DEV= FLOPPY
+   recompile the kernel and the Image file generated is exactly the bootimage-rd
+   image file. To crate the small rootfs image file, read the contents relating
+   root fs creation in chapter 14.
+3. Click the diskette drive icon on the bochs' tool bar. Configuring the drive
+   A (/dev/fd0) to be the empty image file bootroot-0.11 created in the first step. 
+4. Using the folloing commands to create the runnable bootroot image file.
+   dd if=bootimage-rd of=/dev/fd0 bs=512 
+   dd if=rootimage-small of=/dev/fd0 bs=1024 seek=256
+5. Exit linux-0.11-devel system and boot with the bootroot-0.11. Done!
+
+
+
+BTW:
+We need bochs 2.1.1 or above to run the experiment. The bochs simluation 
+system can be download from the following webste freely. 
+
+http://sourceforge.net/projects/bochs/
+
+
+

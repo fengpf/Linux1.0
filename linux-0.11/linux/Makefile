@@ -7,11 +7,19 @@ RAMDISK =  #-DRAMDISK=512
 AS86	=as86 -0 -a
 LD86	=ld86 -0
 
-AS	=as
+AS	=as --32
 LD	=ld
 LDFLAGS	=-m elf_i386 -Ttext 0 -e startup_32
-CC	=gcc -mcpu=i386 $(RAMDISK)
-CFLAGS	=-Wall -O2 -g -fomit-frame-pointer 
+
+# gcc: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+# 修改:
+#  -mcpu=i386 改为-march=i386
+CC	=gcc -march=i386 $(RAMDISK)
+
+#  原因: 这是因为本机系统为64位，
+#  因此需要给所有Makefile中的as命令加上 --32 选项。
+#  需给所有Makefile中的CFLAGS加上 -m32 选项。
+CFLAGS	= -m32 -Wall -O2 -g -fomit-frame-pointer
 
 CPP	=cpp -nostdinc -Iinclude
 

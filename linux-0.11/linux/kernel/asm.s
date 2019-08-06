@@ -10,7 +10,7 @@
  * file also handles (hopefully) fpu-exceptions due to TS-bit, as
  * the fpu must be properly saved/resored. This hasn't been tested.
  */
-
+.code32
 .globl divide_error,debug,nmi,int3,overflow,bounds,invalid_op
 .globl double_fault,coprocessor_segment_overrun
 .globl invalid_TSS,segment_not_present,stack_segment

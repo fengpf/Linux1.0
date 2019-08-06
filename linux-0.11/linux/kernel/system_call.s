@@ -1,5 +1,5 @@
 /*
- *  linux/kernel/system_call.s
+ *  linux/boot/head.s
  *
  *  (C) 1991  Linus Torvalds
  */
@@ -29,7 +29,7 @@
  *	28(%esp) - %oldesp
  *	2C(%esp) - %oldss
  */
-
+.code32
 SIG_CHLD	= 17
 
 EAX		= 0x00
