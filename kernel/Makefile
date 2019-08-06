@@ -144,11 +144,11 @@ $(BUILD_DIR)/kernel.bin: $(OBJS)
 
 hd:
 	dd if=$(BUILD_DIR)/kernel.bin \
-           of=/home/ba/bochs/hd60M.img \
+           of=/data/app/c/linux-mini/kernel/img/bochs/hd60M.img \
            bs=512 count=200 seek=9 conv=notrunc
 
 hdgdb:
-	dd if=$(BUILD_DIR)/kernel.bin of=/home/ba/bochsgdb/hd60M.img bs=512 count=200 seek=9 conv=notrunc
+	dd if=$(BUILD_DIR)/kernel.bin of=/data/app/c/linux-mini/kernel/img/bochsgdb/hd60M.img bs=512 count=200 seek=9 conv=notrunc
 
 clean:
 	@cd $(BUILD_DIR) && rm -f ./*.bin ./*.o
