@@ -56,8 +56,7 @@ dkms.conf
 
 #my ignore
 *.rdb
-redis-cli
-redis-server
 .idea/
 cmake-build-debug/
 CMakeLists.txt
+./img
