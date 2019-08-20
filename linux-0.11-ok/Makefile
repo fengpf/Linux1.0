@@ -135,11 +135,14 @@ cscope:
 	@cscope -Rbkq
 
 start:
-	@qemu-system-i386 -m 16M -boot a -fda Image -hda $(HDA_IMG) -vnc :0
+	@qemu-system-i386 -m 16M -boot a -fda Image -hda $(HDA_IMG)
 
 debug:
 	@echo $(OS)
-	@qemu-system-i386 -m 16M -boot a -fda Image -hda $(HDA_IMG) -s -S -vnc :0
+	@qemu-system-i386 -m 16M -boot a -fda Image -hda $(HDA_IMG) -s -S
+
+# 不带显示屏
+# 	@qemu-system-i386 -m 16M -boot a -fda Image -hda $(HDA_IMG) -s -S -vnc :0
 
 bochs-debug:
 	@$(BOCHS) -q -f tools/bochs/bochsrc/bochsrc-hd-dbg.bxrc	
