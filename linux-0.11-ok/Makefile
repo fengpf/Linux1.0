@@ -38,9 +38,9 @@ LIBS	=lib/lib.a
 .c.s:
 	@$(CC) $(CFLAGS) -S -o $*.s $<
 .s.o:
-	@$(AS)  -o $*.o $<
+	@$(AS) -O0 -o $*.o $<
 .c.o:
-	@$(CC) $(CFLAGS) -c -o $*.o $<
+	@$(CC) $(CFLAGS) -c -O0 -o $*.o $<
 
 all:	Image	
 
