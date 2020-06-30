@@ -27,12 +27,6 @@
 /* for future expansion when we will have different priorities. */
 #define DEV_NUMBUFFS	3
 #define MAX_ADDR_LEN	7
-
-/* 注意mac帧的格式为 头部+数据部分+帧尾部
- * 头部 6+6+2 6表示mac地址，2表示上层协议类型
- * 尾部 4 校验 
- * 中间数据部分长度为46-1500字节
- */
 #define MAX_HEADER	18
 
 #define IS_MYADDR	1		/* address is (one of) our own	*/
@@ -48,7 +42,6 @@
  * gradually phase out this structure, and replace it with the
  * more general (but stolen :-) BSD "ifnet" structure. -FvK
  */
-/* 内核设备结构 */
 struct device {
 
   /*
@@ -56,7 +49,7 @@ struct device {
    * (i.e. as seen by users in the "Space.c" file).  It is the name
    * the interface.
    */
-  char			  *name;                    /* 设备名称，如网卡设备就是eth%d */
+  char			  *name;
 
   /* I/O specific fields.  These will be moved to DDI soon. */
   unsigned long		  rmem_end;		/* shmem "recv" end	*/
@@ -64,13 +57,12 @@ struct device {
   unsigned long		  mem_end;		/* sahared mem end	*/
   unsigned long		  mem_start;		/* shared mem start	*/
   unsigned short	  base_addr;		/* device I/O address	*/
-  /* 设备的中断请求号 */
   unsigned char		  irq;			/* device IRQ number	*/
 
   /* Low-level status flags. */
   volatile unsigned char  start,		/* start an operation	*/
-                          tbusy,		/* transmitter busy	*/    /* 表示当前设备是否忙于发送数据 */
-                          interrupt;		/* interrupt arrived	*/  /* 表示正在处理一个中断 */
+                          tbusy,		/* transmitter busy	*/
+                          interrupt;		/* interrupt arrived	*/
 
   /*
    * Another mistake.
@@ -81,7 +73,6 @@ struct device {
   struct device		  *next;
 
   /* The device initialization function. Called only once. */
-  /* 设备初始化函数 */
   int			  (*init)(struct device *dev);
 
   /* Some hardware also needs these fields, but they are not part of the
@@ -107,23 +98,19 @@ struct device {
   unsigned short	  mtu;		/* interface MTU value		*/
   unsigned short	  type;		/* interface hardware type	*/
   unsigned short	  hard_header_len;	/* hardware hdr length	*/
-  /* 设备携带的对应私有数据，如以太网的则为struct lance_private结构，
-    * 不同的网络设备携带的数据不一样 
-    */
   void			  *priv;	/* pointer to private data	*/
 
   /* Interface address info. */
   unsigned char		  broadcast[MAX_ADDR_LEN];	/* hw bcast add	*/
   unsigned char		  dev_addr[MAX_ADDR_LEN];	/* hw address	*/
   unsigned char		  addr_len;	/* harfware address length	*/
-  unsigned long		  pa_addr;	/* protocol address		*/  /* 设备ip地址 */
-  unsigned long		  pa_brdaddr;	/* protocol broadcast addr	*/ /* 设备广播地址 */
+  unsigned long		  pa_addr;	/* protocol address		*/
+  unsigned long		  pa_brdaddr;	/* protocol broadcast addr	*/
   unsigned long		  pa_dstaddr;	/* protocol P-P other side addr	*/
-  unsigned long		  pa_mask;	/* protocol netmask		*/   /* 子网掩码 */
+  unsigned long		  pa_mask;	/* protocol netmask		*/
   unsigned short	  pa_alen;	/* protocol address length	*/
 
   /* Pointer to the interface buffers. */
-  /* 设备对应的skb */
   struct sk_buff	  *volatile buffs[DEV_NUMBUFFS];
 
   /* Pointers to interface service routines. */
@@ -131,7 +118,6 @@ struct device {
   int			  (*stop)(struct device *dev);
   int			  (*hard_start_xmit) (struct sk_buff *skb,
 					      struct device *dev);
-  /* 完成mac首部的创建回调 */
   int			  (*hard_header) (unsigned char *buff,
 					  struct device *dev,
 					  unsigned short type,
@@ -141,7 +127,6 @@ struct device {
   void			  (*add_arp) (unsigned long addr,
 				      struct sk_buff *skb,
 				      struct device *dev);
-  /* 发送数据包 */
   void			  (*queue_xmit)(struct sk_buff *skb,
 					struct device *dev, int pri);
   int			  (*rebuild_header)(void *eth, struct device *dev);
@@ -156,19 +141,15 @@ struct device {
 
 
 struct packet_type {
-  /* 链路层包类型 */
   unsigned short	type;	/* This is really NET16(ether_type) other
 				 * devices will have to translate
 				 * appropriately.
 				 */
-  /* copy功能和struct inet_protocol中的copy意义相同  */
   unsigned short	copy:1;
-  /* 交给上层处理的函数，如ip包(通过type字段来判断)则处理函数是ip_rcv */
   int			(*func) (struct sk_buff *, struct device *,
 				 struct packet_type *);
   void			*data;
-  /* 包链表 */
-  struct packet_type	*next;  
+  struct packet_type	*next;
 };
 
 

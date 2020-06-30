@@ -13,22 +13,20 @@
 /*
  * This structure is used to hold the arguments that are used when loading binaries.
  */
-/* linux可执行二进制文件的参数结构 
- */
 struct linux_binprm{
-  char buf[128];    /* 文件的头格式 */
+  char buf[128];
   unsigned long page[MAX_ARG_PAGES];
   unsigned long p;
   int sh_bang;
-  struct inode * inode;        /* 可执行文件的inode指针 */
+  struct inode * inode;
   int e_uid, e_gid;
-  int argc, envc; /* 参数和环境变量个数 */
+  int argc, envc;
   char * filename;	   /* Name of binary */
 };
 
 /* This structure defines the functions that are used to load the binary formats that
  * linux accepts. */
-/* linux的二进制文件格式 */
+
 struct linux_binfmt{
   int (*load_binary)(struct linux_binprm *, struct  pt_regs * regs);
   int (*load_shlib)(int fd);

@@ -38,25 +38,9 @@
 static unsigned char cache_21 = 0xff;
 static unsigned char cache_A1 = 0xff;
 
-/* 内核中中断数量 */
 unsigned long intr_count = 0;
-
-/* 中断下半部分处理的全局变量,总共有32中不同的下半部分处理
- * http://www.tldp.org/LDP/tlk/kernel/kernel.html 
- */
-/* There can be up to 32 different bottom half handlers; 
- * bh_base is a vector of pointers to each of the kernel's bottom half handling routines. 
- * bh_active and bh_mask have their bits set according to what handlers have been installed and are active. 
- * If bit N of bh_mask is set then the Nth element of bh_base contains the address of a bottom half routine. 
- * If bit N of bh_active is set then the N'th bottom half handler routine should be called as soon as the scheduler deems reasonable.
- */
-/* 表示是否可以处理某个中断的下半部分，是否可以处理通过
-  * bh_active & hb_mask来判断
-  */
 unsigned long bh_active = 0;
-/* mask表示bh_base中包含有地址实例 */
 unsigned long bh_mask = 0xFFFFFFFF;
-/* 中断的下半部分数组 */
 struct bh_struct bh_base[32]; 
 
 void disable_irq(unsigned int irq_nr)
@@ -104,9 +88,6 @@ void enable_irq(unsigned int irq_nr)
  * enabled.  do_bottom_half() is atomic with respect to itself: a
  * bottom_half handler need not be re-entrant.
  */
-
-/* http://www.tldp.org/LDP/tlk/kernel/kernel.html */
-/* 执行中断的下半部分 */
 asmlinkage void do_bottom_half(void)
 {
 	unsigned long active;
@@ -114,7 +95,6 @@ asmlinkage void do_bottom_half(void)
 	struct bh_struct *bh;
 
 	bh = bh_base;
-	/* 获取需要处理的下半部分位图 */
 	active = bh_active & bh_mask;
 	for (mask = 1, left = ~0 ; left & active ; bh++,mask += mask,left += left) {
 		if (mask & active) {
@@ -217,7 +197,6 @@ static struct sigaction irq_sigaction[16] = {
  * IRQ's should use this format: notably the keyboard/timer
  * routines.
  */
-/* 处理中断 */
 asmlinkage void do_IRQ(int irq, struct pt_regs * regs)
 {
 	struct sigaction * sa = irq + irq_sigaction;
@@ -239,7 +218,6 @@ asmlinkage void do_fast_IRQ(int irq)
 	sa->sa_handler(irq);
 }
 
-/* 注册中断 */
 int irqaction(unsigned int irq, struct sigaction * new_sa)
 {
 	struct sigaction * sa;
@@ -273,10 +251,6 @@ int irqaction(unsigned int irq, struct sigaction * new_sa)
 	return 0;
 }
 		
-/* 注册中断请求
-  * irq为中断请求号 
-  * handle为中断处理句柄  
-  */
 int request_irq(unsigned int irq, void (*handler)(int))
 {
 	struct sigaction sa;
@@ -346,7 +320,6 @@ static struct sigaction ignore_IRQ = {
 	NULL
 };
 
-/* 中断请求的初始化 */
 void init_IRQ(void)
 {
 	int i;

@@ -20,7 +20,6 @@ struct linger {
 #define SOCK_RAW	3		/* raw socket			*/
 #define SOCK_RDM	4		/* reliably-delivered message	*/
 #define SOCK_SEQPACKET	5		/* sequential packet socket	*/
-/* 内核将不对网络数据进行处理而直接交给用户，数据直接从网卡的协议栈交给用户 */
 #define SOCK_PACKET	10		/* linux specific way of	*/
 					/* getting packets at the dev	*/
 					/* level.  For writing rarp and	*/
@@ -41,20 +40,16 @@ struct linger {
 #define PF_IPX		AF_IPX
 
 /* Flags we can use with send/ and recv. */
-/* TCP的带外数据标记，也就是紧急数据，TCP在接收到带外数据时，需要优先处理
-  * 如ftp协议，客户端发送取消文件传输的带外紧急数据
-  */
 #define MSG_OOB		1
-/* 仅仅是数据预先读取和检查，例如读取一个skb，但是不将skb从队列中删除  */
-#define MSG_PEEK	2   
+#define MSG_PEEK	2
 
 /* Setsockoptions(2) level. Thanks to BSD these must match IPPROTO_xxx */
-#define SOL_SOCKET	1  /* 基本套接口 */
-#define SOL_IP		0  /* ip套接口 */
+#define SOL_SOCKET	1
+#define SOL_IP		0
 #define SOL_IPX		256
 #define SOL_AX25	257
-#define SOL_TCP		6  /* tcp套接口 */
-#define SOL_UDP		17 /* udp套接口 */
+#define SOL_TCP		6
+#define SOL_UDP		17
 
 /* For setsockoptions(2) */
 #define SO_DEBUG	1

@@ -148,37 +148,23 @@ print_skb(struct sk_buff *skb)
 }
 
 
-/* 用于检测一个端口号是否已被使用
- * prot表示传输层操作函数的一个结构
- * 每个传输层协议都有一个proto结构对应
- * 所有使用某种协议的套接字均被插入到sock_array数据中
- * 元素指向的sock结构链表当中
- */
-static int sk_inuse(struct proto *prot, int num)
+
+static int
+sk_inuse(struct proto *prot, int num)
 {
   struct sock *sk;
-  /* 首先根据端口号hash出一个套接字 */
+
   for(sk = prot->sock_array[num & (SOCK_ARRAY_SIZE -1 )];
       sk != NULL;
       sk=sk->next) {
-	  /* 如果在端口号对应的sock链中找到了该端口号的sock，
-	    * 则表示该端口已被占用，从这个函数当中就可以知道，
-	    * 对于不同协议使用相同端口号是没有问题的。
-	    */
 	if (sk->num == num) return(1);
   }
-  /* 该端口没有占用 */
   return(0);
 }
 
-/* 获取一个新的空闲端口号 
- * prot表示所使用的协议，
- * base表示最小起始端口号
- * 在对应的struct proto当中都有一个SOCK_ARRAY,该数组中具有SOCK_ARRAY_SIZE=64个元素
- * 每个元素对应一个链表，所以在获取该协议的一个新的端口号时，总是寻找所有链表中长度最短的那个
- * 链表，然后从该链表中获取一个端口号
- */
-unsigned short get_new_socknum(struct proto *prot, unsigned short base)
+
+unsigned short
+get_new_socknum(struct proto *prot, unsigned short base)
 {
   static int start=0;
 
@@ -188,18 +174,15 @@ unsigned short get_new_socknum(struct proto *prot, unsigned short base)
    */
   int i, j;
   int best = 0;
-  /* sock链表的最大长度 */
   int size = 32767; /* a big num. */
   struct sock *sk;
 
-  /* 1024之下的端口号保留，或者必须使用特权才能使用 */
   if (base == 0) base = PROT_SOCK+1+(start % 1024);
   if (base <= PROT_SOCK) {
 	base += PROT_SOCK+(start % 1024);
   }
 
   /* Now look through the entire array and try to find an empty ptr. */
-  /* 从套接字中所有的hash链表中查找 */
   for(i=0; i < SOCK_ARRAY_SIZE; i++) {
 	j = 0;
 	sk = prot->sock_array[(i+base+1) &(SOCK_ARRAY_SIZE -1)];
@@ -207,17 +190,12 @@ unsigned short get_new_socknum(struct proto *prot, unsigned short base)
 		sk = sk->next;
 		j++;
 	}
-	/* 该端口对应的链尚未使用，可以直接返回端口号 */
 	if (j == 0) {
 		start =(i+1+start )%1024;
 		DPRINTF((DBG_INET, "get_new_socknum returning %d, start = %d\n",
 							i + base + 1, start));
 		return(i+base+1);
 	}
-	/* 否则取最小j值的表项，
-	 * 此处的j代表的是端口号对应表项的长度，
-	 * 也就是找出hash数组中对应链表长度最短的那个项
-	 */
 	if (j < size) {
 		best = i;
 		size = j;
@@ -234,13 +212,8 @@ unsigned short get_new_socknum(struct proto *prot, unsigned short base)
 }
 
 
-/* 因为每一个struct proto结构都有一个sock_array数组，
- * 该数组是一个hash数组，根据端口号来hash出sock在数组中的
- * 索引，然后数组中的每一项都是一个单链表，将sk添加到对应的
- * 链表的链首
- * num为端口号 
- */
-void put_sock(unsigned short num, struct sock *sk)
+void
+put_sock(unsigned short num, struct sock *sk)
 {
   struct sock *sk1;
   struct sock *sk2;
@@ -249,19 +222,16 @@ void put_sock(unsigned short num, struct sock *sk)
   DPRINTF((DBG_INET, "put_sock(num = %d, sk = %X\n", num, sk));
   sk->num = num;
   sk->next = NULL;
-  /* 获取在hash数组中的索引 */
   num = num &(SOCK_ARRAY_SIZE -1);
 
   /* We can't have an interupt re-enter here. */
   cli();
-  /* 如果hash链表的首部为NULL，则直接赋值 */
   if (sk->prot->sock_array[num] == NULL) {
 	sk->prot->sock_array[num] = sk;
 	sti();
 	return;
   }
   sti();
-  /* 最多循环三次,这个 for 语句用于估计本地地址子网反掩码 */
   for(mask = 0xff000000; mask != 0xffffffff; mask = (mask >> 8) | mask) {
 	if ((mask & sk->saddr) &&
 	    (mask & sk->saddr) != (mask & 0xffffffff)) {
@@ -269,19 +239,11 @@ void put_sock(unsigned short num, struct sock *sk)
 		break;
 	}
   }
-
-  /* 此时mask的值可能是 0.0.0.0/255.0.0.0/255.255.0.0/255.255.255.0/255.255.255.255
-    * 则对应的saddr为    (0-255).x.x.x/(0.0-255.255).x.x/(0.0.0-255.255.255).x/(0.0.0.0-255.255.255.255)
-    */
   DPRINTF((DBG_INET, "mask = %X\n", mask));
 
   cli();
-  /* 使用本地地址掩码进行地址排列
-    * 
-    */
   sk1 = sk->prot->sock_array[num];
   for(sk2 = sk1; sk2 != NULL; sk2=sk2->next) {
-  	/* 如果if满足，则saddr为0.x.x.x/0.0.x.x/0.0.0.x */
 	if (!(sk2->saddr & mask)) {
 		if (sk2 == sk1) {
 			sk->next = sk->prot->sock_array[num];
@@ -294,19 +256,18 @@ void put_sock(unsigned short num, struct sock *sk)
 		sti();
 		return;
 	}
-	/* 让sk1指针跟着sk2指针移动 */
 	sk1 = sk2;
   }
 
   /* Goes at the end. */
-  /* 将sk添加到链表的最后，并设置next字段为NULL*/
   sk->next = NULL;
   sk1->next = sk;
   sti();
 }
 
-/* 移除一个指定sock结构,将struct sock从sock的队列中删除  */
-static void remove_sock(struct sock *sk1)
+
+static void
+remove_sock(struct sock *sk1)
 {
   struct sock *sk2;
 
@@ -323,36 +284,30 @@ static void remove_sock(struct sock *sk1)
 
   /* We can't have this changing out from under us. */
   cli();
-  /* 使用sock的端口号hash出sock在sock_array中的位置，
-   * 并取得hash链表的链首
-   */
   sk2 = sk1->prot->sock_array[sk1->num &(SOCK_ARRAY_SIZE -1)];
-  /* 如果找到了，则sk1从链表首部删除，将下一个sock作为首部 */
   if (sk2 == sk1) {
 	sk1->prot->sock_array[sk1->num &(SOCK_ARRAY_SIZE -1)] = sk1->next;
 	sti();
 	return;
   }
 
-  /* 开始搜索hash链表 */	
   while(sk2 && sk2->next != sk1) {
 	sk2 = sk2->next;
   }
-  /* 如果找到了，则更改链表关系，也就是将sk1从单链表中删除 */	
+
   if (sk2) {
 	sk2->next = sk1->next;
 	sti();
 	return;
   }
   sti();
-  /* 没找到则不做任何处理 */
+
   if (sk1->num != 0) DPRINTF((DBG_INET, "remove_sock: sock not found.\n"));
 }
 
-/* 这里是真正意义上的销毁套接字了，
- * 在销毁之前需要消费sock的数据包，避免内存泄露
- */
-void destroy_sock(struct sock *sk)
+
+void
+destroy_sock(struct sock *sk)
 {
 	struct sk_buff *skb;
 
@@ -360,17 +315,15 @@ void destroy_sock(struct sock *sk)
   	sk->inuse = 1;			/* just to be safe. */
 
   	/* Incase it's sleeping somewhere. */
-	/* 对于消费的sock结构，其dead字段必须首先设置为1 */
   	if (!sk->dead) 
   		sk->write_space(sk);
 
   	remove_sock(sk);
   
   	/* Now we can no longer get new packets. */
-	/* 将sock的timer从next_timer中删除 */
   	delete_timer(sk);
 
-	/* 以便减少数据包的数量，此处的操作是释放数据包 */
+
 	while ((skb = tcp_dequeue_partial(sk)) != NULL) 
   	{
   		IS_SKB(skb);
@@ -378,7 +331,6 @@ void destroy_sock(struct sock *sk)
   	}
 
   /* Cleanup up the write buffer. */
-  /* 将写缓存清空释放内存 */
   	for(skb = sk->wfront; skb != NULL; ) 
   	{
 		struct sk_buff *skb2;
@@ -397,7 +349,6 @@ void destroy_sock(struct sock *sk)
   	sk->wfront = NULL;
   	sk->wback = NULL;
 
-	/* 释放读sk_buff队列 */
   	if (sk->rqueue != NULL) 
   	{
 	  	while((skb=skb_dequeue(&sk->rqueue))!=NULL)
@@ -527,12 +478,7 @@ inet_fcntl(struct socket *sock, unsigned int cmd, unsigned long arg)
 /*
  *	Set socket options on an inet socket.
  */
-
-/* level指定选项代码的类型
- * optname选项名称
- * optval选项值
- * optlen选项长度
- */
+ 
 static int inet_setsockopt(struct socket *sock, int level, int optname,
 		    char *optval, int optlen)
 {
@@ -544,6 +490,8 @@ static int inet_setsockopt(struct socket *sock, int level, int optname,
 	else
 		return sk->prot->setsockopt(sk,level,optname,optval,optlen);
 }
+
+
 
 
 static int inet_getsockopt(struct socket *sock, int level, int optname,
@@ -562,8 +510,6 @@ static int inet_getsockopt(struct socket *sock, int level, int optname,
  *	This is meant for all protocols to use and covers goings on
  *	at the socket level. Everything here is generic.
  */
-
-
 
 int sock_setsockopt(struct sock *sk, int level, int optname,
 		char *optval, int optlen)
@@ -628,7 +574,7 @@ int sock_setsockopt(struct sock *sk, int level, int optname,
 				sk->reuse = 0;
 			return(0);
 
-		case SO_KEEPALIVE:  /* 表示是否使用保活定时器 */
+		case SO_KEEPALIVE:
 			if (val)
 				sk->keepopen = 1;
 			else 
@@ -758,8 +704,9 @@ int sock_getsockopt(struct sock *sk, int level, int optname,
 
 
 
-/* 开始监听套接字，并没有什么特别操作，只是将sock的状态修改了 */
-static int inet_listen(struct socket *sock, int backlog)
+
+static int
+inet_listen(struct socket *sock, int backlog)
 {
   struct sock *sk;
 
@@ -791,10 +738,8 @@ static int inet_listen(struct socket *sock, int backlog)
  *	the user owning the socket.
  */
 
-/* 有数据可以读了，则唤醒操作该struct sock的进程 */
 static void def_callback1(struct sock *sk)
 {
-	/* 如果struct sock没有被释放 */
 	if(!sk->dead)
 		wake_up_interruptible(sk->sleep);
 }
@@ -805,8 +750,9 @@ static void def_callback2(struct sock *sk,int len)
 		wake_up_interruptible(sk->sleep);
 }
 
-/* 根据协议来创建传输层套接字 */
-static int inet_create(struct socket *sock, int protocol)
+
+static int
+inet_create(struct socket *sock, int protocol)
 {
   struct sock *sk;
   struct proto *prot;
@@ -815,14 +761,8 @@ static int inet_create(struct socket *sock, int protocol)
   sk = (struct sock *) kmalloc(sizeof(*sk), GFP_KERNEL);
   if (sk == NULL) 
   	return(-ENOMEM);
-  /* 新创建的struct sock端口号都为0 */
   sk->num = 0;
-  /* 0表示该sock已被使用 */
   sk->reuse = 0;
-  /* 注意在此处会根据socket的类型来确定协议的类型，
-    * 如下面如果是SOCK_STREAM类型的，则协议只能是IPPROTO_TCP
-    * 否则返回出错
-    */
   switch(sock->type) {
 	case SOCK_STREAM:
 	case SOCK_SEQPACKET:
@@ -832,11 +772,6 @@ static int inet_create(struct socket *sock, int protocol)
 		}
 		protocol = IPPROTO_TCP;
 		sk->no_check = TCP_NO_CHECK;
-		/* 注意这里是在创建套接字的函数当中，在创建套接字的时候，
-		 * 如果需要使用tcp协议，则在具体的struct sock结构当中传输层协议的
-		 * 函数操作集都指向tcp_prot，也就是同一个变量，所以在struct proto结构
-		 * 当中存在一个SOCK_ARRAY数组，用来记录所有使用TCP协议的套接字
-		 */
 		prot = &tcp_prot;
 		break;
 
@@ -845,10 +780,9 @@ static int inet_create(struct socket *sock, int protocol)
 			kfree_s((void *)sk, sizeof(*sk));
 			return(-EPROTONOSUPPORT);
 		}
-                /* 默认的设置为udp的协议 */
 		protocol = IPPROTO_UDP;
 		sk->no_check = UDP_NO_CHECK;
-		prot=&udp_prot;          /* 注意数据报的则是UDP协议 */
+		prot=&udp_prot;
 		break;
       
 	case SOCK_RAW:
@@ -860,7 +794,7 @@ static int inet_create(struct socket *sock, int protocol)
 			kfree_s((void *)sk, sizeof(*sk));
 			return(-EPROTONOSUPPORT);
 		}
-		prot = &raw_prot;          /* 原始套接字的则是raw_prot操作集 */
+		prot = &raw_prot;
 		sk->reuse = 1;
 		sk->no_check = 0;	/*
 					 * Doesn't matter no checksum is
@@ -896,23 +830,16 @@ static int inet_create(struct socket *sock, int protocol)
 #else    
   sk->nonagle = 0;
 #endif  
-  /* 设置struct sock中的type和protocol字段，
-    * 同时还有下面很多字段的初始化信息 
-    */
   sk->type = sock->type;
   sk->protocol = protocol;
   sk->wmem_alloc = 0;
   sk->rmem_alloc = 0;
-  /* 设置最大的接收和发送缓冲 */
   sk->sndbuf = SK_WMEM_MAX;
   sk->rcvbuf = SK_RMEM_MAX;
   sk->pair = NULL;
   sk->opt = NULL;
-  /* 初始化应用程序下次要写的字节的序列号为0 */
   sk->write_seq = 0;
-  /* 初始化本地希望从远端接收的到字节序号为0 */
   sk->acked_seq = 0;
-  /* 初始化应用程序已经读取的字节数为0 */
   sk->copied_seq = 0;
   sk->fin_seq = 0;
   sk->urg_seq = 0;
@@ -926,7 +853,6 @@ static int inet_create(struct socket *sock, int protocol)
   sk->cong_window = 1; /* start with only sending one packet at a time. */
   sk->cong_count = 0;
   sk->ssthresh = 0;
-  /* 最大窗口初始化为0 */
   sk->max_window = 0;
   sk->urginline = 0;
   sk->intr = 0;
@@ -938,17 +864,13 @@ static int inet_create(struct socket *sock, int protocol)
   sk->keepopen = 0;
   sk->zapped = 0;
   sk->done = 0;
-  /* 初始化需要给远端确认，但还没有确认的包的数量为0 */
   sk->ack_backlog = 0;
   sk->window = 0;
-  /* 初始化已接收的字节总数为0 */
   sk->bytes_rcv = 0;
-  /* socket系统调用完成后，socket的状态为TCP_CLOSE */
-  sk->state = TCP_CLOSE;  
+  sk->state = TCP_CLOSE;
   sk->dead = 0;
   sk->ack_timed = 0;
   sk->partial = NULL;
-  /* 初始化用户设定的最大报文段长度为0 */
   sk->user_mss = 0;
   sk->debug = 0;
 
@@ -957,23 +879,17 @@ static int inet_create(struct socket *sock, int protocol)
 
   /* how many packets we should send before forcing an ack. 
      if this is set to zero it is the same as sk->delay_acks = 0 */
-
-  /* 在监听的时候会作为listen的参数给传递进来 */
   sk->max_ack_backlog = 0;
   sk->inuse = 0;
   sk->delay_acks = 0;
   sk->wback = NULL;
   sk->wfront = NULL;
   sk->rqueue = NULL;
-  /* 初始化最大传输单元 */
   sk->mtu = 576;
   sk->prot = prot;
-  /* 注意struct socket和struct sock中的等待队列是一个 */
   sk->sleep = sock->wait;
-
-  /* 初始化本地和远端地址 */
   sk->daddr = 0;
-  sk->saddr = my_addr();  /* 获取的地址为127.0.0.1 */
+  sk->saddr = my_addr();
   sk->err = 0;
   sk->next = NULL;
   sk->pair = NULL;
@@ -981,12 +897,10 @@ static int inet_create(struct socket *sock, int protocol)
   sk->send_head = NULL;
   sk->timeout = 0;
   sk->broadcast = 0;
-  /* 设置struct sock中timer的数据和响应函数 */
   sk->timer.data = (unsigned long)sk;
   sk->timer.function = &net_timer;
   sk->back_log = NULL;
   sk->blog = 0;
-  /* 指定套接字的协议数据，此时的套接字数据仅仅是被初始化 */
   sock->data =(void *) sk;
   sk->dummy_th.doff = sizeof(sk->dummy_th)/4;
   sk->dummy_th.res1=0;
@@ -1008,10 +922,6 @@ static int inet_create(struct socket *sock, int protocol)
   sk->write_space = def_callback1;
   sk->error_report = def_callback1;
 
-  /* 在创建套接字的时候，如果是RAW类型的，sock的num初始化为protocol
-    * 就把套接字对应的sock加入到协议的,其他类型的则没有改操作
-    * hash结构当中
-    */
   if (sk->num) {
 	/*
 	 * It assumes that any protocol which allows
@@ -1023,7 +933,6 @@ static int inet_create(struct socket *sock, int protocol)
 	sk->dummy_th.source = ntohs(sk->num);
   }
 
-  /* 注意在这里对协议对应的套接字进行初始化 */
   if (sk->prot->init) {
 	err = sk->prot->init(sk);
 	if (err != 0) {
@@ -1034,8 +943,9 @@ static int inet_create(struct socket *sock, int protocol)
   return(0);
 }
 
-/* 复制一个socket结构，其实就是创建一个新的socket */
-static int inet_dup(struct socket *newsock, struct socket *oldsock)
+
+static int
+inet_dup(struct socket *newsock, struct socket *oldsock)
 {
   return(inet_create(newsock,
 		   ((struct sock *)(oldsock->data))->protocol));
@@ -1099,8 +1009,8 @@ inet_release(struct socket *sock, struct socket *peer)
    the rebinding of sockets.   What error
    should it return? */
 
-/* 开始真正的绑定 */
-static int inet_bind(struct socket *sock, struct sockaddr *uaddr,
+static int
+inet_bind(struct socket *sock, struct sockaddr *uaddr,
 	       int addr_len)
 {
   struct sockaddr_in addr;
@@ -1108,7 +1018,6 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr,
   unsigned short snum;
   int err;
 
-  /* 获取协议数据 */
   sk = (struct sock *) sock->data;
   if (sk == NULL) {
 	printk("Warning: sock->data = NULL: %d\n" ,__LINE__);
@@ -1117,8 +1026,6 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr,
 
   /* check this error. */
   if (sk->state != TCP_CLOSE) return(-EIO);
-
-  /* 在绑定之前sock的端口号必须为0 */
   if (sk->num != 0) return(-EINVAL);
 
   err=verify_area(VERIFY_READ, uaddr, addr_len);
@@ -1126,7 +1033,6 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr,
   	return err;
   memcpy_fromfs(&addr, uaddr, min(sizeof(addr), addr_len));
 
-  /* 获取绑定地址端口号 */
   snum = ntohs(addr.sin_port);
   DPRINTF((DBG_INET, "bind sk =%X to port = %d\n", sk, snum));
   sk = (struct sock *) sock->data;
@@ -1136,15 +1042,11 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr,
    * be bound to a privileged port. However, since there seems to
    * be a bug here, we will leave it if the port is not privileged.
    */
-  /* 如果没有指定端口号，则系统自定获取一个空闲端口号 */
   if (snum == 0) {
 	snum = get_new_socknum(sk->prot, 0);
   }
-
-  /* 只有超级用户才能使用0-1024的端口 */
   if (snum < PROT_SOCK && !suser()) return(-EACCES);
 
-  /* 绑定的地址必须是本机的 */
   if (addr.sin_addr.s_addr!=0 && chk_addr(addr.sin_addr.s_addr)!=IS_MYADDR)
   	return(-EADDRNOTAVAIL);	/* Source address MUST be ours! */
   	
@@ -1157,7 +1059,6 @@ static int inet_bind(struct socket *sock, struct sockaddr *uaddr,
   /* Make sure we are allowed to bind here. */
   cli();
 outside_loop:
-  /* 依次扫描端口号对应的hash链表 */
   for(sk2 = sk->prot->sock_array[snum & (SOCK_ARRAY_SIZE -1)];
 					sk2 != NULL; sk2 = sk2->next) {
 #if 	1	/* should be below! */
@@ -1174,7 +1075,6 @@ outside_loop:
 	}
 	if (sk2->num != snum) continue;		/* more than one */
 	if (sk2->saddr != sk->saddr) continue;	/* socket per slot ! -FB */
-	/* 如果绑定的本地地址和本地端口已被使用，则绑定失败 */
 	if (!sk2->reuse) {
 		sti();
 		return(-EADDRINUSE);
@@ -1183,15 +1083,8 @@ outside_loop:
   sti();
 
   remove_sock(sk);
-  /* 将sock和端口绑定，并添加到协议的数组链表当中 */
   put_sock(snum, sk);
-  /* 设置本地端口号和远端端口号 */
   sk->dummy_th.source = ntohs(sk->num);
-  /* 注意绑定套接字的远端地址为0，在accept时从绑定套接字里面新建的struct sock
-    * 虽然端口和绑定套接字的端口相同，但是套接字的远端地址不同，注意函数put_sock
-    * 和get_sock的参数的区别，get_sock是根据本地套接字和远端套接字来获取的。put_sock
-    * 仅仅是本地套接字
-    */
   sk->daddr = 0;
   sk->dummy_th.dest = 0;
   return(0);
@@ -1222,10 +1115,7 @@ inet_connect(struct socket *sock, struct sockaddr * uaddr,
   if (sock->state == SS_CONNECTING && sk->protocol == IPPROTO_TCP &&
   	(flags & O_NONBLOCK))
   	return -EALREADY;	/* Connecting is currently in progress */
-
-  /* 刚调用socket系统调用时struct sock的state为TCP_CLOSE,
-    * struct socket的状态为SS_UNCONNECTED
-    */
+  	
   if (sock->state != SS_CONNECTING) {
 	/* We may need to bind the socket. */
 	if (sk->num == 0) {
@@ -1241,8 +1131,7 @@ inet_connect(struct socket *sock, struct sockaddr * uaddr,
   
 	err = sk->prot->connect(sk, (struct sockaddr_in *)uaddr, addr_len);
 	if (err < 0) return(err);
-
-    /* 设置状态为正在连接 */
+  
 	sock->state = SS_CONNECTING;
   }
 
@@ -1287,11 +1176,9 @@ inet_socketpair(struct socket *sock1, struct socket *sock2)
   return(-EOPNOTSUPP);
 }
 
-/* sock监听的套接字
- * newsock是accept中分配的的新的套接字
- * 返回0表示成功
- */
-static int inet_accept(struct socket *sock, struct socket *newsock, int flags)
+
+static int
+inet_accept(struct socket *sock, struct socket *newsock, int flags)
 {
   struct sock *sk1, *sk2;
   int err;
@@ -1307,8 +1194,6 @@ static int inet_accept(struct socket *sock, struct socket *newsock, int flags)
    * We need to free it up because the tcp module creates
    * it's own when it accepts one.
    */
-
-  /* 释放新套接字的协议数据 */
   if (newsock->data) kfree_s(newsock->data, sizeof(struct sock));
   newsock->data = NULL;
 
@@ -1328,7 +1213,6 @@ static int inet_accept(struct socket *sock, struct socket *newsock, int flags)
 		return(-err);
 	}
   }
-  /* 设置新socket的协议数据,sk2是从监听socket的接收队列中获取的 */
   newsock->data = (void *)sk2;
   sk2->sleep = newsock->wait;
   newsock->conn = NULL;
@@ -1355,15 +1239,11 @@ static int inet_accept(struct socket *sock, struct socket *newsock, int flags)
 	newsock->data = NULL;
 	return(err);
   }
-  /* 设置接收的newsock的状态为链接状态 */
   newsock->state = SS_CONNECTED;
   return(0);
 }
 
 
-/* 获取socket的信息
- * peer表示是获取本地信息还是远端信息
- */
 static int
 inet_getname(struct socket *sock, struct sockaddr *uaddr,
 		 int *uaddr_len, int peer)
@@ -1393,7 +1273,6 @@ inet_getname(struct socket *sock, struct sockaddr *uaddr,
 	printk("Warning: sock->data = NULL: %d\n" ,__LINE__);
 	return(0);
   }
-  /* 获取远端信息，否则就是本地信息 */
   if (peer) {
 	if (!tcp_connected(sk->state)) return(-ENOTCONN);
 	sin.sin_port = sk->dummy_th.dest;
@@ -1412,10 +1291,8 @@ inet_getname(struct socket *sock, struct sockaddr *uaddr,
 }
 
 
-/* 从socket中读取数据 
- * noblock表示读取操作是否是阻塞的
- */
-static int inet_read(struct socket *sock, char *ubuf, int size, int noblock)
+static int
+inet_read(struct socket *sock, char *ubuf, int size, int noblock)
 {
   struct sock *sk;
 
@@ -1435,8 +1312,9 @@ static int inet_read(struct socket *sock, char *ubuf, int size, int noblock)
   return(sk->prot->read(sk, (unsigned char *) ubuf, size, noblock,0));
 }
 
-/* 几乎和inet_read函数功能一样 */
-static int inet_recv(struct socket *sock, void *ubuf, int size, int noblock,
+
+static int
+inet_recv(struct socket *sock, void *ubuf, int size, int noblock,
 	  unsigned flags)
 {
   struct sock *sk;
@@ -1458,8 +1336,8 @@ static int inet_recv(struct socket *sock, void *ubuf, int size, int noblock,
 }
 
 
-/* 向socket文件中写入数据 */
-static int inet_write(struct socket *sock, char *ubuf, int size, int noblock)
+static int
+inet_write(struct socket *sock, char *ubuf, int size, int noblock)
 {
   struct sock *sk;
 
@@ -1485,8 +1363,8 @@ static int inet_write(struct socket *sock, char *ubuf, int size, int noblock)
 }
 
 
-/* 和inet_write功能一样 */
-static int inet_send(struct socket *sock, void *ubuf, int size, int noblock, 
+static int
+inet_send(struct socket *sock, void *ubuf, int size, int noblock, 
 	       unsigned flags)
 {
   struct sock *sk;
@@ -1571,8 +1449,8 @@ inet_recvfrom(struct socket *sock, void *ubuf, int size, int noblock,
 }
 
 
-/* 关闭套接字 */
-static int inet_shutdown(struct socket *sock, int how)
+static int
+inet_shutdown(struct socket *sock, int how)
 {
   struct sock *sk;
 
@@ -1618,7 +1496,6 @@ inet_select(struct socket *sock, int sel_type, select_table *wait )
 }
 
 
-/*  INET协议族的端口控制函数 */
 static int
 inet_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 {
@@ -1698,10 +1575,9 @@ inet_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
   return(0);
 }
 
-/* 可以通过force=1来设置强制打破这个sndbuf这个限制
- * 分配成功后，增加sk->wmem_alloc数量
- */
-struct sk_buff *sock_wmalloc(struct sock *sk, unsigned long size, int force,
+
+struct sk_buff *
+sock_wmalloc(struct sock *sk, unsigned long size, int force,
 	     int priority)
 {
   if (sk) {
@@ -1721,11 +1597,9 @@ struct sk_buff *sock_wmalloc(struct sock *sk, unsigned long size, int force,
   return(alloc_skb(size, priority));
 }
 
-/* 用于分配接收缓冲区，内存分配基本
-  * 相同，只不过此时更新的是接收缓冲区
-  * 该函数功能和sock_wmalloc差不多
-  */
-struct sk_buff *sock_rmalloc(struct sock *sk, unsigned long size, int force, int priority)
+
+struct sk_buff *
+sock_rmalloc(struct sock *sk, unsigned long size, int force, int priority)
 {
   if (sk) {
 	if (sk->rmem_alloc + size < sk->rcvbuf || force) {
@@ -1744,9 +1618,9 @@ struct sk_buff *sock_rmalloc(struct sock *sk, unsigned long size, int force, int
   return(alloc_skb(size, priority));
 }
 
-/* sock_rspace 函数用于检查接收缓冲区空闲空间大小
-  */
-unsigned long sock_rspace(struct sock *sk)
+
+unsigned long
+sock_rspace(struct sock *sk)
 {
   int amt;
 
@@ -1759,8 +1633,9 @@ unsigned long sock_rspace(struct sock *sk)
   return(0);
 }
 
-/* 获取发送缓冲区空闲空间的大小*/
-unsigned long sock_wspace(struct sock *sk)
+
+unsigned long
+sock_wspace(struct sock *sk)
 {
   if (sk != NULL) {
 	if (sk->shutdown & SEND_SHUTDOWN) return(0);
@@ -1770,17 +1645,15 @@ unsigned long sock_wspace(struct sock *sk)
   return(0);
 }
 
-/* 释放sk_buff 同时减少sock中sk_buff占用内存大小
- */
-void sock_wfree(struct sock *sk, void *mem, unsigned long size)
+
+void
+sock_wfree(struct sock *sk, void *mem, unsigned long size)
 {
   DPRINTF((DBG_INET, "sock_wfree(sk=%X, mem=%X, size=%d)\n", sk, mem, size));
 
   IS_SKB(mem);
-  /* 释放mem处size大小的内存 */
   kfree_skbmem(mem, size);
   if (sk) {
-  	/* 减少sock中sk_buff大小 */
 	sk->wmem_alloc -= size;
 
 	/* In case it might be waiting for more memory. */
@@ -1793,7 +1666,9 @@ void sock_wfree(struct sock *sk, void *mem, unsigned long size)
   }
 }
 
-void sock_rfree(struct sock *sk, void *mem, unsigned long size)
+
+void
+sock_rfree(struct sock *sk, void *mem, unsigned long size)
 {
   DPRINTF((DBG_INET, "sock_rfree(sk=%X, mem=%X, size=%d)\n", sk, mem, size));
   IS_SKB(mem);
@@ -1811,14 +1686,6 @@ void sock_rfree(struct sock *sk, void *mem, unsigned long size)
 /*
  * This routine must find a socket given a TCP or UDP header.
  * Everyhting is assumed to be in net order.
- */
-
-/* 获取协议上操作某个端口的sock，其中限制条件是
- * 本地地址和本地端口，远程地址和远程端口
- * 该函数和put_sock功能相反，为什么要按照这个条件来获取struct sock 
- * 例如当客户端和服务器之间有一个保活的连接，在保活的时间间隔当中 
- * 服务器重启，当保活的探测包到来时，此时就找不到对应的struct sock结构 
- * 就会给客户端发送一个reset命令，告诉客户端重新连接 
  */
 struct sock *get_sock(struct proto *prot, unsigned short num,
 				unsigned long raddr,
@@ -1842,20 +1709,16 @@ struct sock *get_sock(struct proto *prot, unsigned short num,
   for(s = prot->sock_array[hnum & (SOCK_ARRAY_SIZE - 1)];
       s != NULL; s = s->next) 
   {
-    /* 判断本地端口 */
 	if (s->num != hnum) 
 		continue;
 	if(s->dead && (s->state == TCP_CLOSE))
 		continue;
 	if(prot == &udp_prot)
 		return s;
-	/* 判断远程地址 */
 	if(ip_addr_match(s->daddr,raddr)==0)
 		continue;
-	/* 判断远程端口 */
 	if (s->dummy_th.dest != rnum && s->dummy_th.dest != 0) 
 		continue;
-	/* 判断本地地址 */
 	if(ip_addr_match(s->saddr,laddr) == 0)
 		continue;
 	return(s);
@@ -1875,33 +1738,17 @@ void release_sock(struct sock *sk)
 	return;
   }
 
-  /* 这个blog非常重要，在下面的while循环中会调用到tcp_rcv,
-    * 在该函数中也可能调用到release_sock，如果是同一个sock
-    * 就不会造成函数调用的死循环 
-    */
   if (sk->blog) return;
 
   /* See if we have any packets built up. */
   cli();
   sk->inuse = 1;
-  /* 如果接收数据包缓存队列不为NULL,网络层模块在将一个数据包传递给传输层
-    * 模块处理时(调用tcp_rcv),如果当前对应的套接字正忙，则将数据包插入到sock结构的
-    * back_log队列当中，但是插入到该队列中的数据包并不算是被接收，该队列中的数据包
-    * 需要进行一系列处理后插入rqueue接收队列中时，方才算是完成接收。release_sock
-    * 函数就是从back_log中取数据包重新调用tcp_rcv函数对数据包进行接收，所谓的
-    * back_log队列只是数据包暂居之所，不可久留，所以也就必须对这个队列中数据包尽快进行
-    * 处理
-    */
   while(sk->back_log != NULL) {
 	struct sk_buff *skb;
-	/* 表示之后的数据包都要被丢弃，这里应该不是丢弃，而是不处理 */
+
 	sk->blog = 1;
 	skb =(struct sk_buff *)sk->back_log;
 	DPRINTF((DBG_INET, "release_sock: skb = %X:\n", skb));
-	/* 如果以back_log为首的链表不止一个节点，
-	 * 则将头部节点删除,因为在while循环里面，
-	 * 最终的结果就是整个back_log被删除
-	 */
 	if (skb->next != skb) {
 		sk->back_log = skb->next;
 		skb->prev->next = skb->next;
@@ -1911,9 +1758,6 @@ void release_sock(struct sock *sk)
 	}
 	sti();
 	DPRINTF((DBG_INET, "sk->back_log = %X\n", sk->back_log));
-        /* 注意在这里如果是tcp协议的则调用的tcp_rcv，
-          * 如果是udp则调用的是udp_rcv函数
-          */
 	if (sk->prot->rcv) sk->prot->rcv(skb, skb->dev, sk->opt,
 					 skb->saddr, skb->len, skb->daddr, 1,
 
@@ -1921,7 +1765,6 @@ void release_sock(struct sock *sk)
 	(struct inet_protocol *)sk->pair); 
 	cli();
   }
-  /* 打开标记 */
   sk->blog = 0;
   sk->inuse = 0;
   sti();
@@ -1967,7 +1810,7 @@ inet_fioctl(struct inode *inode, struct file *file,
 }
 
 
-/* 这个文件操作和net_fops有啥区别?*/
+
 
 static struct file_operations inet_fops = {
   NULL,		/* LSEEK	*/
@@ -2011,10 +1854,6 @@ static struct proto_ops inet_proto_ops = {
 extern unsigned long seq_offset;
 
 /* Called by ddi.c on kernel startup.  */
-
-/* AF_INET族协议初始化，注册INET协议设备的文件操作符
-  * 同时注册INET协议族的函数操作集合 
-  */
 void inet_proto_init(struct ddi_proto *pro)
 {
   struct inet_protocol *p;
@@ -2029,40 +1868,29 @@ void inet_proto_init(struct ddi_proto *pro)
   }
 
   /* Tell SOCKET that we are alive... */
-  /* 注册的变量都存放在p_ops数组当中，当创建socket的时候
-    * 会根据传递的family来确定使用哪个struct proto_ops
-    */
   (void) sock_register(inet_proto_ops.family, &inet_proto_ops);
 
   seq_offset = CURRENT_TIME*250;
 
   /* Add all the protocols. */
-  /* 将各种协议的套接字数组置空，也就是协议的套接字链表为空 */
   for(i = 0; i < SOCK_ARRAY_SIZE; i++) {
 	tcp_prot.sock_array[i] = NULL;
 	udp_prot.sock_array[i] = NULL;
 	raw_prot.sock_array[i] = NULL;
   }
   printk("IP Protocols: ");
-  
-  /* 将静态变量组成的一个链进行初始化，全部添加到inet_protocol协议数组当中 
-    * 该inet_protocol链表是网络层向上层传递数据时调用的协议结构 
-    */
   for(p = inet_protocol_base; p != NULL;) {
 	struct inet_protocol *tmp;
 
 	tmp = (struct inet_protocol *) p->next;
-	/* 添加的变量最终都存放在inet_protos数组当中 */
 	inet_add_protocol(p);
 	printk("%s%s",p->name,tmp?", ":"\n");
 	p = tmp;
   }
 
   /* Initialize the DEV module. */
-  /* 初始化网络设备 */
   dev_init();
 
   /* Initialize the "Buffer Head" pointers. */
-  /* 初始化inet协议族的网络中断下半部分处理 */
   bh_base[INET_BH].routine = inet_bh;
 }

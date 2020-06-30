@@ -14,9 +14,7 @@
 
 #include <asm/segment.h>
 
-/* 每个信号都是用信号位图来表示的 */
 #define _S(nr) (1<<((nr)-1))
-
 
 #define _BLOCKABLE (~(_S(SIGKILL) | _S(SIGSTOP)))
 
@@ -147,7 +145,6 @@ static void check_pending(int signum)
 	if (p->sa_handler == SIG_IGN) {
 		if (signum == SIGCHLD)
 			return;
-		/* 设置进程收到的信号 */
 		current->signal &= ~_S(signum);
 		return;
 	}

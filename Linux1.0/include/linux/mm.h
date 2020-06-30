@@ -45,7 +45,7 @@ struct vm_area_struct {
 	struct vm_area_struct * vm_next;	/* linked list */
 	struct vm_area_struct * vm_share;	/* linked list */
 	struct inode * vm_inode;
-	unsigned long vm_offset;		/*从文件的第几个字节处开始映射*/
+	unsigned long vm_offset;
 	struct vm_operations_struct * vm_ops;
 };
 
@@ -89,14 +89,11 @@ extern unsigned long secondary_page_list;
  * overhead, just use __get_free_page() directly..
  */
 extern unsigned long __get_free_page(int priority);
-
-/* 该函数拿到的页被清0 */
 extern inline unsigned long get_free_page(int priority)
 {
 	unsigned long page;
 
 	page = __get_free_page(priority);
-	/* 将page对应的页中的数据清0*/
 	if (page)
 		__asm__ __volatile__("rep ; stosl"
 			: /* no outputs */ \
@@ -165,13 +162,12 @@ __asm__ __volatile__("movl %%cr3,%%eax\n\tmovl %%eax,%%cr3": : :"ax")
 
 extern unsigned long high_memory;
 
-/* 获取物理地址对应的页号，相当于是除以4KB */
 #define MAP_NR(addr) ((addr) >> PAGE_SHIFT)
-#define MAP_PAGE_RESERVED (1<<15)			/* 为内核保留的页 */
+#define MAP_PAGE_RESERVED (1<<15)
 
 extern unsigned short * mem_map;
 
-#define PAGE_PRESENT	0x001                /* 内存在主存中 */
+#define PAGE_PRESENT	0x001
 #define PAGE_RW		0x002
 #define PAGE_USER	0x004
 #define PAGE_PWT	0x008	/* 486 only - not used currently */
@@ -186,14 +182,7 @@ extern unsigned short * mem_map;
 #define PAGE_READONLY	(PAGE_PRESENT | PAGE_USER | PAGE_ACCESSED)
 #define PAGE_TABLE	(PAGE_PRESENT | PAGE_RW | PAGE_USER | PAGE_ACCESSED)
 
-/* 获取内存的优先级 */
-/* 如果在free_page_list当中没有空闲物理页，则返回失败
- */
 #define GFP_BUFFER	0x00
-/* 表示一定要得到内存，如果常规空闲列表free_page_list已用完，
- * 则向内核保留内存池secondary_page_list中申请，
- * 如果仍然没有申请到，则返回空，特别是内核中还有中断需要处理的时候
- */
 #define GFP_ATOMIC	0x01
 #define GFP_USER	0x02
 #define GFP_KERNEL	0x03

@@ -90,8 +90,6 @@ done:
 	brelse(bh);
 }
 
-
-/* 校验硬盘分区是否正确 */
 static void check_partition(struct gendisk *hd, unsigned int dev)
 {
 	static int first_time = 1;
@@ -173,7 +171,6 @@ void resetup_one_dev(struct gendisk *dev, int drive)
 		dev->sizes[i] = dev->part[i].nr_sects >> (BLOCK_SIZE_BITS - 9);
 }
 
-/* 设置对应的硬盘 */
 static void setup_dev(struct gendisk *dev)
 {
 	int i;
@@ -207,16 +204,13 @@ asmlinkage int sys_setup(void * BIOS)
 		return -1;
 	callable = 0;
 
-	/* gendisk_head链在blk_dev_init函数中初始化 */
 	for (p = gendisk_head ; p ; p=p->next) {
 		setup_dev(p);
 		nr += p->nr_real;
 	}
-
-	/* 如果有虚拟盘则加载虚拟盘 */
+		
 	if (ramdisk_size)
 		rd_load();
-	/*挂在根文件系统*/
 	mount_root();
 	return (0);
 }

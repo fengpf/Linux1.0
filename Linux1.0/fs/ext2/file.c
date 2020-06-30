@@ -54,8 +54,6 @@ static struct file_operations ext2_file_operations = {
 	ext2_sync_file		/* fsync */
 };
 
-/* 普通文件的inode操作函数
- */
 struct inode_operations ext2_file_inode_operations = {
 	&ext2_file_operations,/* default file operations */
 	NULL,			/* create */
@@ -74,7 +72,6 @@ struct inode_operations ext2_file_inode_operations = {
 	ext2_permission		/* permission */
 };
 
-/* ext2文件系统的文件读函数 */
 static int ext2_file_read (struct inode * inode, struct file * filp,
 		    char * buf, int count)
 {
@@ -82,7 +79,6 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 	int block, blocks, offset;
 	int bhrequest, uptodate;
 	struct buffer_head ** bhb, ** bhe;
-	/* 依次磁盘请求最多允许32块数据 */
 	struct buffer_head * bhreq[NBUF];
 	struct buffer_head * buflist[NBUF];
 	struct super_block * sb;
@@ -99,7 +95,6 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 			      inode->i_mode);
 		return -EINVAL;
 	}
-	/* 读取偏移量和文件大小 */
 	offset = filp->f_pos;
 	size = inode->i_size;
 	if (offset > size)
@@ -111,12 +106,9 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 	if (left <= 0)
 		return 0;
 	read = 0;
-	/* 获取当前偏移量所在的块号和所在块中的偏移量 */
 	block = offset >> EXT2_BLOCK_SIZE_BITS(sb);
 	offset &= (sb->s_blocksize - 1);
-	/* size表示文件总共占用了多少块 */
 	size = (size + sb->s_blocksize - 1) >> EXT2_BLOCK_SIZE_BITS(sb);
-	/* 还需要读取块的数量 */
 	blocks = (left + offset + sb->s_blocksize - 1) >> EXT2_BLOCK_SIZE_BITS(sb);
 	bhb = bhe = buflist;
 	if (filp->f_reada) {
@@ -137,23 +129,18 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 	 * This routine is optimized to make maximum use of the various
 	 * buffers and caches.
 	 */
-	/* 一轮循环最多只能读取32个数据块
-	 */
+
 	do {
 		bhrequest = 0;
 		uptodate = 1;
-		/* blocks表示总共要读取的块数，block表示开始读取的块号 */
 		while (blocks) {
 			--blocks;
-			/* 获取的高度缓存地址都存放在buflist数组当中 */
 			*bhb = ext2_getblk (inode, block++, 0, &err);
 			if (*bhb && !(*bhb)->b_uptodate) {
 				uptodate = 0;
-				/* 将读取的高速缓存指针存放在bhreq当中，这个时候bhreq中元素其实和buflist中相同 */
 				bhreq[bhrequest++] = *bhb;
 			}
 
-			/* 如果当前读取到最后一个高速缓存，则bhb又回到数组首地址 */
 			if (++bhb == &buflist[NBUF])
 				bhb = buflist;
 
@@ -164,15 +151,12 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 			if (uptodate)
 				break;
 
-			/* 表示已经获取8个高速缓存，则这一轮就要停止了 */
 			if (bhb == bhe)
 				break;
 		}
 
 		/*
 		 * Now request them all
-		 */
-		/* 将所有逻辑块的数据读取到相应的高速缓存当中 
 		 */
 		if (bhrequest)
 			ll_rw_block (READ, bhrequest, bhreq);
@@ -183,7 +167,6 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 			 */
 			if (*bhe) {
 				wait_on_buffer (*bhe);
-				/* 如果读取的数据不是最新的，则返回出错 */
 				if (!(*bhe)->b_uptodate) { /* read error? */
 				        brelse(*bhe);
 					if (++bhe == &buflist[NBUF])
@@ -192,16 +175,13 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 					break;
 				}
 			}
-			/* 获取这次读取的字节数chars */
 			if (left < sb->s_blocksize - offset)
 				chars = left;
 			else
 				chars = sb->s_blocksize - offset;
-			/* 修改文件指针便宜、剩下读取字节数和已读取字节数 */
 			filp->f_pos += chars;
 			left -= chars;
 			read += chars;
-			/* 将数据从高速缓存当中拷贝到buf当中 */
 			if (*bhe) {
 				memcpy_tofs (buf, offset + (*bhe)->b_data,
 					     chars);
@@ -212,11 +192,10 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 					put_fs_byte (0, buf++);
 			}
 			offset = 0;
-			/* 如果bhe等于buflist数组最后一个元素，则又回到数组首部 */
 			if (++bhe == &buflist[NBUF])
 				bhe = buflist;
 		} while (left > 0 && bhe != bhb && (!*bhe || !(*bhe)->b_lock));
-	} while (left > 0);   /* 如果还有没读完，则继续读 */
+	} while (left > 0);
 
 	/*
 	 * Release the read-ahead blocks
@@ -233,7 +212,6 @@ static int ext2_file_read (struct inode * inode, struct file * filp,
 		inode->i_atime = CURRENT_TIME;
 		inode->i_dirt = 1;
 	}
-	/* 返回实际读取字节数 */
 	return read;
 }
 
@@ -267,32 +245,24 @@ static int ext2_file_write (struct inode * inode, struct file * filp,
  * ok, append may not work when many processes are writing at the same time
  * but so what. That way leads to madness anyway.
  */
- 	/* 判断文件写的位置 */
 	if (filp->f_flags & O_APPEND)
 		pos = inode->i_size;
 	else
 		pos = filp->f_pos;
 	written = 0;
 	while (written < count) {
-		/* 获取要写位置的高速缓存指针，当当前读取的块号大于当前文件的最大块号，
-		 * 则ext2_getblk函数为文件分配一个块号
-		 */
 		bh = ext2_getblk (inode, pos / sb->s_blocksize, 1, &err);
 		if (!bh) {
 			if (!written)
 				written = err;
 			break;
 		}
-		/* 获取块内偏移位置处剩下的字节数 */
 		c = sb->s_blocksize - (pos % sb->s_blocksize);
-		/* 获取当前块要写的数量 */
 		if (c > count-written)
 			c = count - written;
 		if (c != sb->s_blocksize && !bh->b_uptodate) {
-			/* 将块数据读入到高速缓存 */
 			ll_rw_block (READ, 1, &bh);
 			wait_on_buffer (bh);
-			/* 不是最新的则返回出错 */
 			if (!bh->b_uptodate) {
 				brelse (bh);
 				if (!written)
@@ -300,21 +270,15 @@ static int ext2_file_write (struct inode * inode, struct file * filp,
 				break;
 			}
 		}
-		/* 获取块内高速缓存写入的地址，并增加偏移量的位置 */
 		p = (pos % sb->s_blocksize) + bh->b_data;
 		pos += c;
-		/*如果最后偏移位置大于文件大小则修改文件大小，同时设置inode为脏 */
 		if (pos > inode->i_size) {
 			inode->i_size = pos;
 			inode->i_dirt = 1;
 		}
-		/* 增加已写入的字节数，同时将数据拷贝到高速缓存 */
 		written += c;
 		memcpy_fromfs (p, buf, c);
 		buf += c;
-		/* 因为是写入操作所以一定要设置高速缓存内容为最新的，并设置脏标记以便在同步的时候，
-		 * 把刚才写入的数据写入到文件 
-		 */
 		bh->b_uptodate = 1;
 		bh->b_dirt = 1;
 		brelse (bh);
@@ -329,11 +293,6 @@ static int ext2_file_write (struct inode * inode, struct file * filp,
  * Called when a inode is released. Note that this is different
  * from ext2_open: open gets called at every open, but release
  * gets called only when /all/ the files are closed.
- */
-
-/* sys_close关闭文件时，在确定最后需要关闭文件的时候，
- * 也就是f_count=1
- * 会调用此函数
  */
 static void ext2_release_file (struct inode * inode, struct file * filp)
 {

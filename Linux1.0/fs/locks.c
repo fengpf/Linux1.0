@@ -38,8 +38,6 @@ static struct file_lock *file_lock_free_list;
  * Called at boot time to initialize the lock table ...
  */
 
-/* 初始化文件锁，以单链表的形式将其连接起来
- */
 void fcntl_init_locks(void)
 {
 	struct file_lock *fl;
@@ -53,10 +51,6 @@ void fcntl_init_locks(void)
 	file_lock_free_list = &file_lock_table[0];
 }
 
-/* fd是操作的文件描述符，
- * l是传递进来的锁的结构
- * 如果存在冲突则返回冲突的那一段
- */
 int fcntl_getlk(unsigned int fd, struct flock *l)
 {
 	int error;
@@ -69,16 +63,13 @@ int fcntl_getlk(unsigned int fd, struct flock *l)
 	error = verify_area(VERIFY_WRITE,l, sizeof(*l));
 	if (error)
 		return error;
-	/* 将l指向的内存复制到flock当中 */
 	memcpy_fromfs(&flock, l, sizeof(flock));
 	if (flock.l_type == F_UNLCK)
 		return -EINVAL;
 	if (!copy_flock(filp, &file_lock, &flock, fd))
 		return -EINVAL;
 
-	/* 循环处理锁 */
 	for (fl = filp->f_inode->i_flock; fl != NULL; fl = fl->fl_next) {
-		/* 如果存在冲突，则修改传递参数锁的属性 */
 		if (conflict(&file_lock, fl)) {
 			flock.l_pid = fl->fl_owner->pid;
 			flock.l_start = fl->fl_start;
@@ -202,7 +193,6 @@ void fcntl_remove_locks(struct task_struct *task, struct file *filp,
  * Result is a boolean indicating success.
  */
 
-/* 根据struct flock来创建一个struct file_lock */
 static int copy_flock(struct file *filp, struct file_lock *fl, struct flock *l,
                       unsigned int fd)
 {
@@ -238,7 +228,6 @@ static int copy_flock(struct file *filp, struct file_lock *fl, struct flock *l,
  * Determine if lock {sys_fl} blocks lock {caller_fl} ...
  */
 
-/* 判断两个锁之间是否有冲突,返回0表示没冲突，否则有冲突 */
 static int conflict(struct file_lock *caller_fl, struct file_lock *sys_fl)
 {
 	if (   caller_fl->fl_owner == sys_fl->fl_owner
@@ -246,9 +235,6 @@ static int conflict(struct file_lock *caller_fl, struct file_lock *sys_fl)
 		return 0;
 	if (!overlap(caller_fl, sys_fl))
 		return 0;
-	/* 如果存在交叉，且两个都是读锁，返回0，
-	 * 如果当中存在一个写锁，则出错 
-	 */
 	switch (caller_fl->fl_type) {
 	case F_RDLCK :
 		return sys_fl->fl_type != F_RDLCK;
@@ -258,8 +244,6 @@ static int conflict(struct file_lock *caller_fl, struct file_lock *sys_fl)
 	return 0;	/* shouldn't get here, but just in case */
 }
 
-/* 判断两个锁的段是否有交叉 
- */
 static int overlap(struct file_lock *fl1, struct file_lock *fl2)
 {
 	return fl1->fl_end >= fl2->fl_start && fl2->fl_end >= fl1->fl_start;

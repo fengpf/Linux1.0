@@ -22,7 +22,6 @@ extern void sem_exit (void);
 
 int getrusage(struct task_struct *, int, struct rusage *);
 
-/* 真正将信号值写到进程的signal变量当中 */
 static int generate(unsigned long sig, struct task_struct * p)
 {
 	unsigned long mask = 1 << (sig-1);
@@ -44,20 +43,10 @@ static int generate(unsigned long sig, struct task_struct * p)
 	return 1;
 }
 
-
-/* 向进程发送信号
- * sig代表信号
- * 代表接受信号的进程
- * priv代表信号的优先级
- * 返回0表示成功 
- */
 int send_sig(unsigned long sig,struct task_struct * p,int priv)
 {
 	if (!p || sig > 32)
 		return -EINVAL;
-    /* 发送信号的进程要是同一个会话当中，并且进程所属用户也要相同，否则不行，
-      * 如果系统中有多个账户登录，则其中一个账户的进程不同向其他账户的进程发送信号
-      */
 	if (!priv && ((sig != SIGCONT) || (current->session != p->session)) &&
 	    (current->euid != p->euid) && (current->uid != p->uid) && !suser())
 		return -EPERM;
@@ -78,8 +67,6 @@ int send_sig(unsigned long sig,struct task_struct * p,int priv)
 	return 0;
 }
 
-
-/* 子进程退出时会向父进程发送SIGCHLD信号 */
 void notify_parent(struct task_struct * tsk)
 {
 	if (tsk->p_pptr == task[1])
@@ -207,8 +194,6 @@ void audit_ptree(void)
  * satisfactory prgp is found. I dunno - gdb doesn't work correctly
  * without this...
  */
-
-/* 返回进程组所在的会话id */
 int session_of_pgrp(int pgrp)
 {
 	struct task_struct *p;
@@ -230,8 +215,6 @@ int session_of_pgrp(int pgrp)
  * kill_pg() sends a signal to a process group: this is what the tty
  * control characters do (^C, ^Z etc)
  */
-
-/* 杀死一个进程组，成功发送了一个以上的信号则返回0 */
 int kill_pg(int pgrp, int sig, int priv)
 {
 	struct task_struct *p;
@@ -241,7 +224,6 @@ int kill_pg(int pgrp, int sig, int priv)
 	if (sig<0 || sig>32 || pgrp<=0)
 		return -EINVAL;
 	for_each_task(p) {
-        /* 如果进程组号相同 */
 		if (p->pgrp == pgrp) {
 			if ((err = send_sig(sig,p,priv)) != 0)
 				retval = err;
@@ -249,7 +231,6 @@ int kill_pg(int pgrp, int sig, int priv)
 				found++;
 		}
 	}
-    /* found表示找到并正确发送信号的进程数 */
 	return(found ? 0 : retval);
 }
 
@@ -258,8 +239,6 @@ int kill_pg(int pgrp, int sig, int priv)
  * to send SIGHUP to the controlling process of a terminal when
  * the connection is lost.
  */
-
-/* 给会话组首进程发送信号 */
 int kill_sl(int sess, int sig, int priv)
 {
 	struct task_struct *p;
@@ -269,7 +248,6 @@ int kill_sl(int sess, int sig, int priv)
 	if (sig<0 || sig>32 || sess<=0)
 		return -EINVAL;
 	for_each_task(p) {
-        /* 一个会话当中存在多个进程组，每个进程组存在一个领导进程 */
 		if (p->session == sess && p->leader) {
 			if ((err = send_sig(sig,p,priv)) != 0)
 				retval = err;
@@ -280,7 +258,6 @@ int kill_sl(int sess, int sig, int priv)
 	return(found ? 0 : retval);
 }
 
-/* 向具体进程发送信号 */
 int kill_proc(int pid, int sig, int priv)
 {
  	struct task_struct *p;
@@ -302,10 +279,8 @@ asmlinkage int sys_kill(int pid,int sig)
 {
 	int err, retval = 0, count = 0;
 
-    /* 如果是0，则向当前进程所在的组发送信号 */
 	if (!pid)
 		return(kill_pg(current->pgrp,sig,0));
-    /* 向除了0,1进程和当前进程之外的所有进程发送信号 */
 	if (pid == -1) {
 		struct task_struct * p;
 		for_each_task(p) {
@@ -317,7 +292,6 @@ asmlinkage int sys_kill(int pid,int sig)
 		}
 		return(count ? retval : -ESRCH);
 	}
-    /* 向其他进程组发送信号 */
 	if (pid < 0) 
 		return(kill_pg(-pid,sig,0));
 	/* Normal kill */
@@ -361,7 +335,6 @@ static int has_stopped_jobs(int pgrp)
 	return(0);
 }
 
-/* 将father进程创建的所有子进程的创建进程设置为1号进程 */
 static void forget_original_parent(struct task_struct * father)
 {
 	struct task_struct * p;
@@ -442,8 +415,6 @@ fake_volatile:
 		kill_pg(current->pgrp,SIGCONT,1);
 	}
 	/* Let father know we died */
-
-    /* 通知父进程 */
 	notify_parent(current);
 	
 	/*
@@ -510,7 +481,6 @@ asmlinkage int sys_exit(int error_code)
 	do_exit((error_code&0xff)<<8);
 }
 
-/* 如果成功则返回0 */
 asmlinkage int sys_wait4(pid_t pid,unsigned long * stat_addr, int options, struct rusage * ru)
 {
 	int flag, retval;
@@ -525,18 +495,13 @@ asmlinkage int sys_wait4(pid_t pid,unsigned long * stat_addr, int options, struc
 	add_wait_queue(&current->wait_chldexit,&wait);
 repeat:
 	flag=0;
-	/* p_cptr表示最小的孩子进程，p_opptr表示老的兄弟进程
-	 * 通过该循环可以知道从当前进程的最小进程开始一次向年长的进程开始扫描
-	 */
  	for (p = current->p_cptr ; p ; p = p->p_osptr) {
-		/* 如果pid>0表示等待某个具体的进程，等于0则表示进程组，小于0则表示所有子进程 */
 		if (pid>0) {
 			if (p->pid != pid)
 				continue;
 		} else if (!pid) {
 			if (p->pgrp != current->pgrp)
 				continue;
-		/* 如果是负数的话，则等待进程组号为-pid的所有子进程*/
 		} else if (pid != -1) {
 			if (p->pgrp != -pid)
 				continue;
@@ -587,22 +552,12 @@ repeat:
 	}
 	if (flag) {
 		retval = 0;
-		/* 如果子进程还在运行，并且选项标记为WNOHANG，
-		 * 则表示不等待，函数直接返回
-		 */
 		if (options & WNOHANG)
 			goto end_wait4;
-		/* 设置进程为可中断状态，同时调用进程调度函数
-		 */
 		current->state=TASK_INTERRUPTIBLE;
 		schedule();
-		/* 设置进程收到SIGCHLD信号
-		 */
 		current->signal &= ~(1<<(SIGCHLD-1));
 		retval = -ERESTARTSYS;
-		/* 如果当前进程的所有信号都被阻塞了，也就是子进程退出时
-		 * 给父进程发送的SIGCHLD信号也被阻塞了，则函数直接返回
-		 */
 		if (current->signal & ~current->blocked)
 			goto end_wait4;
 		goto repeat;

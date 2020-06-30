@@ -251,7 +251,6 @@ static unsigned int load_aout_interp(struct exec * interp_ex,
 #define INTERPRETER_AOUT 1
 #define INTERPRETER_ELF 2
 
-/* 加载elf格式的二进制文件 */
 int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 {
 	struct elfhdr elf_ex;
@@ -278,8 +277,7 @@ int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	status = 0;
 	load_addr = 0;
 	elf_ex = *((struct elfhdr *) bprm->buf);	  /* exec-header */
-
-	/* elf文件头进行判断 */
+	
 	if (elf_ex.e_ident[0] != 0x7f ||
 	    strncmp(&elf_ex.e_ident[1], "ELF",3) != 0)
 		return  -ENOEXEC;
@@ -300,7 +298,6 @@ int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	
 	old_fs = get_fs();
 	set_fs(get_ds());
-        /* 继续读取可执行文件 */
 	retval = read_exec(bprm->inode, elf_ex.e_phoff, (char *) elf_phdata,
 			   elf_ex.e_phentsize * elf_ex.e_phnum);
 	set_fs(old_fs);
@@ -314,7 +311,6 @@ int load_elf_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	elf_bss = 0;
 	elf_brk = 0;
 	
-        /* 打开可执行文件的inode，并返回文件的文件描述符 */
 	elf_exec_fileno = open_inode(bprm->inode, O_RDONLY);
 
 	if (elf_exec_fileno < 0) {

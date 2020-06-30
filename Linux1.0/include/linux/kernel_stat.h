@@ -9,13 +9,11 @@
 
 #define DK_NDRIVE 4
 
-/* 记录内核状态 */
 struct kernel_stat {
 	unsigned int cpu_user, cpu_nice, cpu_system;
 	unsigned int dk_drive[DK_NDRIVE];
 	unsigned int pgpgin, pgpgout;
 	unsigned int pswpin, pswpout;
-        /* 内核中处理中断的数量 */
 	unsigned int interrupts;
 	unsigned int ipackets, opackets;
 	unsigned int ierrors, oerrors;

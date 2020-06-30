@@ -49,36 +49,33 @@ struct new_stat {
 #define S_IFBLK  0060000
 #define S_IFDIR  0040000
 #define S_IFCHR  0020000
-#define S_IFIFO  0010000                         /* 有名管道文件 */
-#define S_ISUID  0004000		        /* u+s可以让用户在执行这个二进制程序的时候，
-								  * effective id变为这个文件的owner user
-								  */
+#define S_IFIFO  0010000
+#define S_ISUID  0004000
 #define S_ISGID  0002000
 #define S_ISVTX  0001000
 
 #define S_ISLNK(m)	(((m) & S_IFMT) == S_IFLNK)
-#define S_ISREG(m)	(((m) & S_IFMT) == S_IFREG)  /* 是否一个常规文件 */
-#define S_ISDIR(m)	(((m) & S_IFMT) == S_IFDIR)    /* 是否一个目录 */
-#define S_ISCHR(m)	(((m) & S_IFMT) == S_IFCHR)  /* 是否一个字符文件 */
-#define S_ISBLK(m)	(((m) & S_IFMT) == S_IFBLK)   /* 是否一个块文件 */
-/* 判断是否有名管道文件，有名管道的名字存在于文件系统当中，而内容存在于内存当中 */
-#define S_ISFIFO(m)	(((m) & S_IFMT) == S_IFIFO)    
+#define S_ISREG(m)	(((m) & S_IFMT) == S_IFREG)
+#define S_ISDIR(m)	(((m) & S_IFMT) == S_IFDIR)
+#define S_ISCHR(m)	(((m) & S_IFMT) == S_IFCHR)
+#define S_ISBLK(m)	(((m) & S_IFMT) == S_IFBLK)
+#define S_ISFIFO(m)	(((m) & S_IFMT) == S_IFIFO)
 #define S_ISSOCK(m)	(((m) & S_IFMT) == S_IFSOCK)
 
-#define S_IRWXU 00700     /* 用户自己的rwx权限 */
-#define S_IRUSR 00400     /* 用户是否可读 */
-#define S_IWUSR 00200     /* 用户是否可写 */
-#define S_IXUSR 00100     /* 用户是否可执行 */
+#define S_IRWXU 00700
+#define S_IRUSR 00400
+#define S_IWUSR 00200
+#define S_IXUSR 00100
 
-#define S_IRWXG 00070     /* 用户所在组的rwx权限 */
-#define S_IRGRP 00040     /* 用户所在组的r权限 */
-#define S_IWGRP 00020     /* 用户所在组的w权限 */
-#define S_IXGRP 00010     /* 用户所在组的x权限 */
+#define S_IRWXG 00070
+#define S_IRGRP 00040
+#define S_IWGRP 00020
+#define S_IXGRP 00010
 
-#define S_IRWXO 00007     /* 其他用户的rwx权限 */
-#define S_IROTH 00004     /* 其他用户的r权限 */
-#define S_IWOTH 00002     /* 其他用户的w权限 */
-#define S_IXOTH 00001     /* 其他用户的x权限 */
+#define S_IRWXO 00007
+#define S_IROTH 00004
+#define S_IWOTH 00002
+#define S_IXOTH 00001
 
 #ifdef __KERNEL__
 #define S_IRWXUGO	(S_IRWXU|S_IRWXG|S_IRWXO)

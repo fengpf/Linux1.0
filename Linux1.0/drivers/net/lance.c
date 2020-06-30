@@ -258,7 +258,6 @@ unsigned long lance_probe1(short ioaddr, unsigned long mem_start)
     if (inw(ioaddr+LANCE_DATA) != 0x0004)
 	return mem_start;
 
-	/* 真正的注册网卡 */
     dev = init_etherdev(0, sizeof(struct lance_private)
 			+ PKT_BUF_SZ*(RX_RING_SIZE + TX_RING_SIZE),
 			&mem_start);
@@ -368,16 +367,13 @@ unsigned long lance_probe1(short ioaddr, unsigned long mem_start)
 }
 
 
-/* 打开lance网卡设备 */
 static int
 lance_open(struct device *dev)
 {
-    /* 从设备的私有数据取出struct lance_private结构 */
     struct lance_private *lp = (struct lance_private *)dev->priv;
     int ioaddr = dev->base_addr;
     int i;
 
-    /* 注册lance设备的中断请求 */
     if (request_irq(dev->irq, &lance_interrupt)) {
 	return -EAGAIN;
     }
@@ -588,7 +584,6 @@ lance_start_xmit(struct sk_buff *skb, struct device *dev)
 }
 
 /* The LANCE interrupt handler. */
-/* lance网卡设备的中断处理 */
 static void
 lance_interrupt(int reg_ptr)
 {
@@ -656,7 +651,6 @@ lance_interrupt(int reg_ptr)
 	    if (databuff >= (void*)(&lp->tx_bounce_buffs[TX_RING_SIZE])
 		|| databuff < (void*)(lp->tx_bounce_buffs)) {
 		struct sk_buff *skb = ((struct sk_buff *)databuff) - 1;
-		/* 发送之后不管是否成功，则立即释放 */
 		if (skb->free)
 		    kfree_skb(skb, FREE_WRITE);
 		else
@@ -698,7 +692,6 @@ lance_interrupt(int reg_ptr)
 	       dev->name, inw(ioaddr + LANCE_ADDR),
 	       inw(dev->base_addr + LANCE_DATA));
 
-    /* 退出中断处理 */
     dev->interrupt = 0;
     return;
 }

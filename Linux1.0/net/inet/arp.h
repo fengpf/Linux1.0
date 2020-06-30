@@ -27,11 +27,8 @@
 
 
 /* This structure defines the ARP mapping cache. */
-
-/* arp表项，也就是arp缓存 */
 struct arp_table {
   struct arp_table		*next;
-  /* 记录该项上次被使用的时间 */
   volatile unsigned long	last_used;
   unsigned int			flags;
 #if 1
@@ -41,9 +38,9 @@ struct arp_table {
   unsigned char			plen;
   unsigned char			ptype;
 #endif
-  unsigned char			ha[MAX_ADDR_LEN];  /* 硬件地址 */
-  unsigned char			hlen;              /* 硬件地址长度 */
-  unsigned char			htype;             /* 硬件类型 */
+  unsigned char			ha[MAX_ADDR_LEN];
+  unsigned char			hlen;
+  unsigned char			htype;
 };
 
 

@@ -56,9 +56,7 @@ static int sock_select(struct inode *inode, struct file *file, int which, select
 static int sock_ioctl(struct inode *inode, struct file *file,
 		      unsigned int cmd, unsigned long arg);
 
-/* 操作socket的文件操作函数，在Read_write.c中调用到这里，
-  * inet,unix协议族都使用这个
-  */
+
 static struct file_operations socket_file_ops = {
   sock_lseek,
   sock_read,
@@ -72,10 +70,7 @@ static struct file_operations socket_file_ops = {
 };
 
 static struct socket sockets[NSOCKETS];
-
-/* 等待使用struct socket结构的进程队列，目前系统中支持的struct sockets结构为NSOCKETS个 */
 static struct wait_queue *socket_wait_free = NULL;
-/* 系统中所有的协议族数据，如常用的UNIX、INET协议族 */
 static struct proto_ops *pops[NPROTO];
 static int net_debug = 0;
 
@@ -83,7 +78,8 @@ static int net_debug = 0;
 
 #ifdef SOCK_DEBUG
 /* Module debugging. */
-static void dprintf(int level, char *fmt, ...)
+static void
+dprintf(int level, char *fmt, ...)
 {
   char buff[1024];
   va_list args;
@@ -98,12 +94,8 @@ static void dprintf(int level, char *fmt, ...)
 #endif
 
 /* Obtains the first available file descriptor and sets it up for use. */
-
-/* 返回socket文件的文件描述符，因为事先已经创建好了inode，
- * 然后在进程的file数组当中查找一个可用的file，然后相互
- * 初始化file和inode，最后返回file的索引，即文件描述符
- */
-static int get_fd(struct inode *inode)
+static int
+get_fd(struct inode *inode)
 {
   int fd;
   struct file *file;
@@ -135,26 +127,23 @@ static int get_fd(struct inode *inode)
  * the descriptor, but makes sure it does nothing more. Called when
  * an incomplete socket must be closed, along with sock_release().
  */
-static inline void toss_fd(int fd)
+static inline void
+toss_fd(int fd)
 {
   sys_close(fd);		/* the count protects us from iput */
 }
 
-/* 根据inode来查找struct socket结构 */
-struct socket *socki_lookup(struct inode *inode)
+
+struct socket *
+socki_lookup(struct inode *inode)
 {
   struct socket *sock;
 
-  /* 如果当前inode的i_socket不为空，且两者相互指向，则返回 */
   if ((sock = inode->i_socket) != NULL) {
 	if (sock->state != SS_FREE && SOCK_INODE(sock) == inode)
 		return sock;
 	printk("socket.c: uhhuh. stale inode->i_socket pointer\n");
   }
-  /* 如果inode当中没有struct socket的指针，
-    * 则在socket数组中查找socket中inode指向参数inode的项
-    * 如果找到了则返回，否则返回为空。
-    */
   for (sock = sockets; sock <= last_socket; ++sock)
 	if (sock->state != SS_FREE && SOCK_INODE(sock) == inode) {
 		printk("socket.c: uhhuh. Found socket despite no inode->i_socket pointer\n");
@@ -163,8 +152,9 @@ struct socket *socki_lookup(struct inode *inode)
   return(NULL);
 }
 
-/* 根据文件描述符来查找struct socket */
-static inline struct socket *sockfd_lookup(int fd, struct file **pfile)
+
+static inline struct socket *
+sockfd_lookup(int fd, struct file **pfile)
 {
   struct file *file;
 
@@ -173,12 +163,9 @@ static inline struct socket *sockfd_lookup(int fd, struct file **pfile)
   return(socki_lookup(file->f_inode));
 }
 
-/* 查找一个空闲的struct socket结构，并初始化相应的关系
- * 如sock中有inode节点指针，inode中有struct socket指针
- * wait表示在获取socket结构的时候，该函数是不是阻塞的，
- * wait>0表示阻塞，=0表示非阻塞
- */
-static struct socket *sock_alloc(int wait)
+
+static struct socket *
+sock_alloc(int wait)
 {
   struct socket *sock;
 
@@ -186,7 +173,6 @@ static struct socket *sock_alloc(int wait)
 	cli();
 	for (sock = sockets; sock <= last_socket; ++sock) {
 		if (sock->state == SS_FREE) {
-			/* 注意在socket系统调用完成后struct socket的状态为SS_UNCONNECTED */
 			sock->state = SS_UNCONNECTED;
 			sti();
 			sock->flags = 0;
@@ -202,17 +188,11 @@ static struct socket *sock_alloc(int wait)
 			 * inode.  The close system call will iput this inode
 			 * for us.
 			 */
-			/* 此处给socket分配了一个inode，但是inode是空的，
-			 * 并没有包含有效数据的 
-			 */
 			if (!(SOCK_INODE(sock) = get_empty_inode())) {
 				printk("NET: sock_alloc: no more inodes\n");
 				sock->state = SS_FREE;
 				return(NULL);
 			}
-			/* 此时设置inode和socket之间的关系,
-			 * S_IFSOCK指明inode指向的时socket文件 
-			 */
 			SOCK_INODE(sock)->i_mode = S_IFSOCK;
 			SOCK_INODE(sock)->i_uid = current->euid;
 			SOCK_INODE(sock)->i_gid = current->egid;
@@ -228,7 +208,6 @@ static struct socket *sock_alloc(int wait)
 	sti();
 	if (!wait) return(NULL);
 	DPRINTF((net_debug, "NET: sock_alloc: no free sockets, sleeping...\n"));
-	/* 如果没找到，则在socket_wait_free队列中睡眠，当有释放时，则唤醒该进程 */
 	interruptible_sleep_on(&socket_wait_free);
 	if (current->signal & ~current->blocked) {
 		DPRINTF((net_debug, "NET: sock_alloc: sleep was interrupted\n"));
@@ -239,17 +218,16 @@ static struct socket *sock_alloc(int wait)
 }
 
 
-/* 关闭socket连接，并且唤醒所有正在等待使用该socket的进程
- * 该函数只作用于UNIX域
- */
-static inline void sock_release_peer(struct socket *peer)
+static inline void
+sock_release_peer(struct socket *peer)
 {
   peer->state = SS_DISCONNECTING;
   wake_up_interruptible(peer->wait);
 }
 
-/* 释放一个socket结构，并唤醒socket_wait_free队列 */
-static void sock_release(struct socket *sock)
+
+static void
+sock_release(struct socket *sock)
 {
   int oldstate;
   struct inode *inode;
@@ -257,7 +235,6 @@ static void sock_release(struct socket *sock)
 
   DPRINTF((net_debug, "NET: sock_release: socket 0x%x, inode 0x%x\n",
 						sock, SOCK_INODE(sock)));
-  /* 设置socket的状态为正在关闭连接 */
   if ((oldstate = sock->state) != SS_UNCONNECTED)
 			sock->state = SS_DISCONNECTING;
 
@@ -290,13 +267,13 @@ sock_lseek(struct inode *inode, struct file *file, off_t offset, int whence)
   return(-ESPIPE);
 }
 
-/* 从socket文件中读取数据 */
-static int sock_read(struct inode *inode, struct file *file, char *ubuf, int size)
+
+static int
+sock_read(struct inode *inode, struct file *file, char *ubuf, int size)
 {
   struct socket *sock;
 
   DPRINTF((net_debug, "NET: sock_read: buf=0x%x, size=%d\n", ubuf, size));
-  /* 通过inode找到socket结构体 */
   if (!(sock = socki_lookup(inode))) {
 	printk("NET: sock_read: can't find socket for inode!\n");
 	return(-EBADF);
@@ -305,8 +282,9 @@ static int sock_read(struct inode *inode, struct file *file, char *ubuf, int siz
   return(sock->ops->read(sock, ubuf, size, (file->f_flags & O_NONBLOCK)));
 }
 
-/* 向socket文件中写数据 */
-static int sock_write(struct inode *inode, struct file *file, char *ubuf, int size)
+
+static int
+sock_write(struct inode *inode, struct file *file, char *ubuf, int size)
 {
   struct socket *sock;
 
@@ -345,7 +323,8 @@ sock_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 }
 
 
-static int sock_select(struct inode *inode, struct file *file, int sel_type, select_table * wait)
+static int
+sock_select(struct inode *inode, struct file *file, int sel_type, select_table * wait)
 {
   struct socket *sock;
 
@@ -363,8 +342,9 @@ static int sock_select(struct inode *inode, struct file *file, int sel_type, sel
   return(0);
 }
 
-/* 关闭socket文件 */
-void sock_close(struct inode *inode, struct file *file)
+
+void
+sock_close(struct inode *inode, struct file *file)
 {
   struct socket *sock;
 
@@ -377,18 +357,10 @@ void sock_close(struct inode *inode, struct file *file)
 	printk("NET: sock_close: can't find socket for inode!\n");
 	return;
   }
-  /* 将socket释放 */
   sock_release(sock);
 }
 
-/* sock_awaitconn 函数只用于 UNIX 域， 用于处理一个客户端连接请求。
- * socket 结构中 iconn， conn结构用于 UNIX 域中连接操作，
- * 其中 iconn 只用于服务器端，表示等待连接但尚未完成连接的
- * 客户端 socket 结构链表。
- * servsock表示服务套接字
- * mysock表示连接套接字 
- * 函数返回0，则表示连接成功  
- */
+
 int
 sock_awaitconn(struct socket *mysock, struct socket *servsock)
 {
@@ -397,8 +369,6 @@ sock_awaitconn(struct socket *mysock, struct socket *servsock)
   DPRINTF((net_debug,
 	"NET: sock_awaitconn: trying to connect socket 0x%x to 0x%x\n",
 							mysock, servsock));
-
-  /* 检查服务端是否处于侦听状态 */
   if (!(servsock->flags & SO_ACCEPTCON)) {
 	DPRINTF((net_debug,
 		"NET: sock_awaitconn: server not accepting connections\n"));
@@ -408,13 +378,11 @@ sock_awaitconn(struct socket *mysock, struct socket *servsock)
   /* Put ourselves on the server's incomplete connection queue. */
   mysock->next = NULL;
   cli();
-  /* 把mysock套接字添加到iconn队列的末尾 */
   if (!(last = servsock->iconn)) servsock->iconn = mysock;
-  else {
+    else {
 	while (last->next) last = last->next;
 	last->next = mysock;
   }
-  /* 设置连接套接字的状态为正在连接 */
   mysock->state = SS_CONNECTING;
   mysock->conn = servsock;
   sti();
@@ -423,15 +391,9 @@ sock_awaitconn(struct socket *mysock, struct socket *servsock)
    * Wake up server, then await connection. server will set state to
    * SS_CONNECTED if we're connected.
    */
-  /* 唤醒服务进程 
-    */
   wake_up_interruptible(servsock->wait);
   if (mysock->state != SS_CONNECTED) {
-        /* 当前进程等待在mysock的wait当中 */
 	interruptible_sleep_on(mysock->wait);
-        /* 当前进程被唤醒之后，不是连接状态或是正在连接状态，
-          * 则进行相应的错误处理，如果是正在连接状态，则继续等待连接 
-          */
 	if (mysock->state != SS_CONNECTED &&
 	    mysock->state != SS_DISCONNECTING) {
 		/*
@@ -443,7 +405,6 @@ sock_awaitconn(struct socket *mysock, struct socket *servsock)
 		 */
 		if (mysock->conn == servsock) {
 			cli();
-                        /* 将mysock从servsock的等待连接队列中删除 */
 			if ((last = servsock->iconn) == mysock)
 					servsock->iconn = mysock->next;
 			else {
@@ -463,10 +424,8 @@ sock_awaitconn(struct socket *mysock, struct socket *servsock)
  * Perform the socket system call. we locate the appropriate
  * family, then create a fresh socket.
  */
-/* 创建一个socket的套接字，一般会根据type的类型来确定protocol的类型，
- * protocol的类型一般默认为IPPROTO_IP
- */
-static int sock_socket(int family, int type, int protocol)
+static int
+sock_socket(int family, int type, int protocol)
 {
   int i, fd;
   struct socket *sock;
@@ -477,7 +436,6 @@ static int sock_socket(int family, int type, int protocol)
 						family, type, protocol));
 
   /* Locate the correct protocol family. */
-  /* 找到协议族的操作函数 */
   for (i = 0; i < NPROTO; ++i) {
 	if (pops[i] == NULL) continue;
 	if (pops[i]->family == family) break;
@@ -509,10 +467,6 @@ static int sock_socket(int family, int type, int protocol)
   }
   sock->type = type;
   sock->ops = ops;
-  /* 根据不同的协议族函数集来创建socket，
-    * 因此在不同协议的proto_ops结构当中是没有socket调用的， 
-    * 只有create函数 
-    */
   if ((i = sock->ops->create(sock, protocol)) < 0) {
 	sock_release(sock);
 	return(i);
@@ -527,9 +481,6 @@ static int sock_socket(int family, int type, int protocol)
 }
 
 
-/* 这个和pipe功能有相似之处，pipe是单工的，socketpair是双工的
- * family只能是UNIX域的。
- */
 static int
 sock_socketpair(int family, int type, int protocol, unsigned long usockvec[2])
 {
@@ -545,7 +496,6 @@ sock_socketpair(int family, int type, int protocol, unsigned long usockvec[2])
    * Obtain the first socket and check if the underlying protocol
    * supports the socketpair call.
    */
-  /* 如果创建失败，则直接返回 */
   if ((fd1 = sock_socket(family, type, protocol)) < 0) return(fd1);
   sock1 = sockfd_lookup(fd1, NULL);
   if (!sock1->ops->socketpair) {
@@ -566,7 +516,6 @@ sock_socketpair(int family, int type, int protocol, unsigned long usockvec[2])
   }
   sock1->conn = sock2;
   sock2->conn = sock1;
-  /* 完成socketpair操作后，则这只套接字的状态为连接状态 */
   sock1->state = SS_CONNECTED;
   sock2->state = SS_CONNECTED;
 
@@ -607,12 +556,6 @@ sock_bind(int fd, struct sockaddr *umyaddr, int addrlen)
  * necessary for a listen, and if that works, we mark the socket as
  * ready for listening.
  */
-
-/* 监听套接字 
- * fd表示要监听的套接字描述符
- * backlog表示在accept函数中等待读取的队列的长度，
- * 也就是struct sock的max_ack_backlog
- */
 static int
 sock_listen(int fd, int backlog)
 {
@@ -621,14 +564,12 @@ sock_listen(int fd, int backlog)
   DPRINTF((net_debug, "NET: sock_listen: fd = %d\n", fd));
   if (fd < 0 || fd >= NR_OPEN || current->filp[fd] == NULL)
 								return(-EBADF);
-  /* 找到文件描述符的socket结构 */
   if (!(sock = sockfd_lookup(fd, NULL))) return(-ENOTSOCK);
   if (sock->state != SS_UNCONNECTED) {
 	DPRINTF((net_debug, "NET: sock_listen: socket isn't unconnected\n"));
 	return(-EINVAL);
   }
   if (sock->ops && sock->ops->listen) sock->ops->listen(sock, backlog);
-  /* 设置socket的状态为监听状态 */
   sock->flags |= SO_ACCEPTCON;
   return(0);
 }
@@ -639,12 +580,8 @@ sock_listen(int fd, int backlog)
  * with the client, wake up the client, then return the new
  * connected fd.
  */
-/* fd是监听的套接字,该函数的执行过程为，首先在sockets数组当中申请一个
- * struct socket，在申请struct socket的过程中就给socket分配了inode节点，
- * 然后在分配一个struct file结构，最后就返回一个新的文件描述符，该过程是一个
- * 反向的过程
- */
-static int sock_accept(int fd, struct sockaddr *upeer_sockaddr, int *upeer_addrlen)
+static int
+sock_accept(int fd, struct sockaddr *upeer_sockaddr, int *upeer_addrlen)
 {
   struct file *file;
   struct socket *sock, *newsock;
@@ -653,8 +590,7 @@ static int sock_accept(int fd, struct sockaddr *upeer_sockaddr, int *upeer_addrl
   DPRINTF((net_debug, "NET: sock_accept: fd = %d\n", fd));
   if (fd < 0 || fd >= NR_OPEN || ((file = current->filp[fd]) == NULL))
 								return(-EBADF);
-
-  /* 找到监听fd的socket结构 */
+  
   if (!(sock = sockfd_lookup(fd, &file))) return(-ENOTSOCK);
   if (sock->state != SS_UNCONNECTED) {
 	DPRINTF((net_debug, "NET: sock_accept: socket isn't unconnected\n"));
@@ -666,12 +602,10 @@ static int sock_accept(int fd, struct sockaddr *upeer_sockaddr, int *upeer_addrl
 	return(-EINVAL);
   }
 
-	/* 非阻塞的获取一个socket结构 */
   if (!(newsock = sock_alloc(0))) {
 	printk("NET: sock_accept: no more sockets\n");
 	return(-EAGAIN);
   }
-  /* 两个socket的类型，协议族操作函数相同 */
   newsock->type = sock->type;
   newsock->ops = sock->ops;
   if ((i = sock->ops->dup(newsock, sock)) < 0) {
@@ -685,7 +619,6 @@ static int sock_accept(int fd, struct sockaddr *upeer_sockaddr, int *upeer_addrl
 	return(i);
   }
 
-  /* 给新的socket分配一个文件描述符 */
   if ((fd = get_fd(SOCK_INODE(newsock))) < 0) {
 	sock_release(newsock);
 	return(-EINVAL);
@@ -697,18 +630,13 @@ static int sock_accept(int fd, struct sockaddr *upeer_sockaddr, int *upeer_addrl
   if (upeer_sockaddr)
 	newsock->ops->getname(newsock, upeer_sockaddr, upeer_addrlen, 1);
 
-  /* 返回新的socket文件描述符 */
   return(fd);
 }
 
 
 /* Attempt to connect to a socket with the server address. */
-/* 去连接服务器
- * fd是连接套接字的文件描述符
- * uservaddr是服务器地址
- * addrlen地址长度
- */
-static int sock_connect(int fd, struct sockaddr *uservaddr, int addrlen)
+static int
+sock_connect(int fd, struct sockaddr *uservaddr, int addrlen)
 {
   struct socket *sock;
   struct file *file;
@@ -735,7 +663,6 @@ static int sock_connect(int fd, struct sockaddr *uservaddr, int addrlen)
 			"NET: sock_connect: socket not unconnected\n"));
 		return(-EINVAL);
   }
-  /* 开始真正的连接服务器 */
   i = sock->ops->connect(sock, uservaddr, addrlen, file->f_flags);
   if (i < 0) {
 	DPRINTF((net_debug, "NET: sock_connect: connect failed\n"));
@@ -771,7 +698,8 @@ sock_getpeername(int fd, struct sockaddr *usockaddr, int *usockaddr_len)
 }
 
 
-static int sock_send(int fd, void * buff, int len, unsigned flags)
+static int
+sock_send(int fd, void * buff, int len, unsigned flags)
 {
   struct socket *sock;
   struct file *file;
@@ -885,7 +813,6 @@ sock_getsockopt(int fd, int level, int optname, char *optval, int *optlen)
 }
 
 
-/* 关闭套接字 */
 static int
 sock_shutdown(int fd, int how)
 {
@@ -1119,10 +1046,8 @@ static struct file_operations net_fops = {
  * advertise its address family, and have it linked into the
  * SOCKET module.
  */
-
-/* 注册不同地址族的协议操作函数
- */
-int sock_register(int family, struct proto_ops *ops)
+int
+sock_register(int family, struct proto_ops *ops)
 {
   int i;
 
@@ -1141,7 +1066,6 @@ int sock_register(int family, struct proto_ops *ops)
 }
 
 
-/* 网络模块初始化 */
 void
 sock_init(void)
 {
@@ -1149,9 +1073,6 @@ sock_init(void)
   int i;
 
   /* Set up our SOCKET VFS major device. */
-/* 注册网络设备读写函数，在Linux系统当中所有的设备操作都被
- * 当成对文件系统的操作
- */
   if (register_chrdev(SOCKET_MAJOR, "socket", &net_fops) < 0) {
 	printk("NET: cannot register major device %d!\n", SOCKET_MAJOR);
 	return;
@@ -1164,9 +1085,6 @@ sock_init(void)
   for (i = 0; i < NPROTO; ++i) pops[i] = NULL;
 
   /* Initialize the DDI module. */
-
-/* 设备驱动接口模块
-  */
   ddi_init();
 
   /* Initialize the ARP module. */

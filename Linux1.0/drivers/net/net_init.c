@@ -66,7 +66,6 @@ unsigned long lance_init(unsigned long mem_start, unsigned long mem_end);
   and returns the new start of free memory.
   */
 
-/* 网络设备的初始化，此处就是网卡的初始化 */
 unsigned long net_dev_init (unsigned long mem_start, unsigned long mem_end)
 {
 
@@ -77,7 +76,6 @@ unsigned long net_dev_init (unsigned long mem_start, unsigned long mem_end)
 #endif
 
 #if defined(CONFIG_LANCE)			/* Note this is _not_ CONFIG_AT1500. */
-	/* 为网卡分配的地址空间 */
 	mem_start = lance_init(mem_start, mem_end);
 #endif
 
@@ -94,19 +92,13 @@ unsigned long net_dev_init (unsigned long mem_start, unsigned long mem_end)
    long.
  */
 
-/* 初始化以太网设备函数 
- * 这个函数执行完毕之后，Linux就可以正确操作网卡，
- * 而网卡已经作为一个dev对象嵌入到Linux内核  
- */
 struct device *init_etherdev(struct device *dev, int sizeof_private,
 							 unsigned long *mem_startp)
 {
 	int i;
-        /* 表示是否是一个新的设备 */
 	int new_device = 0;
 
 	if (dev == NULL) {
-                /* eth%d表示网卡的名称，注意每个设备后面的内存布局 */
 		int alloc_size = sizeof(struct device) + sizeof("eth%d ")
 			+ sizeof_private;
 		if (mem_startp && *mem_startp ) {
@@ -124,11 +116,9 @@ struct device *init_etherdev(struct device *dev, int sizeof_private,
 	if (dev->name  &&  dev->name[0] == '\0')
 		sprintf(dev->name, "eth%d", next_ethdev_number++);
 
-        /* 初始化设备的skb */
 	for (i = 0; i < DEV_NUMBUFFS; i++)
 		dev->buffs[i] = NULL;
 	
-        /* 设置链路层回调函数 */
 	dev->hard_header	= eth_header;
 	dev->add_arp		= eth_add_arp;
 	dev->queue_xmit		= dev_queue_xmit;
@@ -150,12 +140,10 @@ struct device *init_etherdev(struct device *dev, int sizeof_private,
 	dev->pa_brdaddr		= 0;
 	dev->pa_mask		= 0;
 	dev->pa_alen		= sizeof(unsigned long);
-
-	/* 将网卡设备嵌入到Linux内核设备列表当中 */
+	
 	if (new_device) {
 		/* Append the device to the device queue. */
 		struct device **old_devp = &dev_base;
-                /* 将新的设备添加到设备链表的末尾 */
 		while ((*old_devp)->next)
 			old_devp = & (*old_devp)->next;
 		(*old_devp)->next = dev;

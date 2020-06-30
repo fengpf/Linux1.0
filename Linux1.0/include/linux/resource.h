@@ -16,7 +16,6 @@
 #define	RUSAGE_CHILDREN	(-1)
 #define RUSAGE_BOTH	(-2)		/* sys_wait4() uses this */
 
-/* 进程的资源使用情况结构 */
 struct	rusage {
 	struct timeval ru_utime;	/* user time used */
 	struct timeval ru_stime;	/* system time used */
@@ -25,7 +24,7 @@ struct	rusage {
 	long	ru_idrss;		/* integral unshared data size */
 	long	ru_isrss;		/* integral unshared stack size */
 	long	ru_minflt;		/* page reclaims */
-	long	ru_majflt;		/* page faults */       /* 页失败 */
+	long	ru_majflt;		/* page faults */
 	long	ru_nswap;		/* swaps */
 	long	ru_inblock;		/* block input operations */
 	long	ru_oublock;		/* block output operations */
@@ -40,10 +39,10 @@ struct	rusage {
  * Resource limits
  */
 
-#define RLIMIT_CPU	0		/* CPU time in ms */ /* 最大允许使用的cpu时间 */
+#define RLIMIT_CPU	0		/* CPU time in ms */
 #define RLIMIT_FSIZE	1		/* Maximum filesize */
-#define RLIMIT_DATA	2		/* max data size */    /* 进程的最大数据段*/
-#define RLIMIT_STACK	3		/* max stack size */ /* 最大的进程资源 */
+#define RLIMIT_DATA	2		/* max data size */
+#define RLIMIT_STACK	3		/* max stack size */
 #define RLIMIT_CORE	4		/* max core file size */
 #define RLIMIT_RSS	5		/* max resident set size */
 

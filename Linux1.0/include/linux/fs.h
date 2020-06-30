@@ -47,24 +47,22 @@ extern void buffer_init(void);
 extern unsigned long inode_init(unsigned long start, unsigned long end);
 extern unsigned long file_table_init(unsigned long start, unsigned long end);
 
-#define MAJOR(a) (int)((unsigned short)(a) >> 8)   /* 主设备号 */
-#define MINOR(a) (int)((unsigned short)(a) & 0xFF) /* 次设备号，此设备号在最低8位 */
-#define MKDEV(a,b) ((int)((((a) & 0xff) << 8) | ((b) & 0xff)))  /* 生成一个设备号，包括主次设备号 */
+#define MAJOR(a) (int)((unsigned short)(a) >> 8)
+#define MINOR(a) (int)((unsigned short)(a) & 0xFF)
+#define MKDEV(a,b) ((int)((((a) & 0xff) << 8) | ((b) & 0xff)))
 
 #ifndef NULL
 #define NULL ((void *) 0)
 #endif
 
 #define NIL_FILP	((struct file *)0)
-#define SEL_IN		1	/* 探测数据是否可以读取 */
-#define SEL_OUT		2 	/* 探测对应套接字发送缓冲区的空闲大小 */
-#define SEL_EX		4	/* 探测之前操作是否有错误发生 */
+#define SEL_IN		1
+#define SEL_OUT		2
+#define SEL_EX		4
 
 /*
  * These are the fs-independent mount-flags: up to 16 flags are supported
  */
-
-/* 文件系统的挂载标记 */
 #define MS_RDONLY    1 /* mount read-only */
 #define MS_NOSUID    2 /* ignore suid and sgid bits */
 #define MS_NODEV     4 /* disallow access to device special files */
@@ -159,51 +157,38 @@ struct buffer_head {
 #include <linux/xia_fs_i.h>
 #include <linux/sysv_fs_i.h>
 
-
-/* inode中有一部分数据是在磁盘当中的
- * 注意inode中并没有struct file的指针
- * 注意inode是VFS中一个重要的结构体，
- * inode中除了存储一些VFS中必须的数据，
- * 还存储了特定文件系统中的inode信息，
- * 如ext2中的struct ext2_inode_info等等
- */
 struct inode {
-	dev_t		i_dev;			/* 设备号 */
-	unsigned long	i_ino;		/* i节点号 */
-	umode_t		i_mode;			/* 文件类型以及文件权限 */
-	nlink_t		i_nlink;		/* 硬链接计数 */
-	uid_t		i_uid;          	/* 创建文件的用户ID */
-	gid_t		i_gid;			/* 创建文件的用户组ID */
-	dev_t		i_rdev;			/* 是设备标识符，也存储了主次设备号，
-							* 表示设备的实际设备号，不是逻辑设备号 
-							*/
-	off_t		i_size;			/* 文件大小单位为字节 */
+	dev_t		i_dev;
+	unsigned long	i_ino;
+	umode_t		i_mode;
+	nlink_t		i_nlink;
+	uid_t		i_uid;
+	gid_t		i_gid;
+	dev_t		i_rdev;
+	off_t		i_size;
 	time_t		i_atime;
 	time_t		i_mtime;
-	time_t		i_ctime;		/* inode的修改时间 */
-	unsigned long	i_blksize;	/* 数据块大小 */
-	unsigned long	i_blocks;	/* 文件数据块数 */
-	struct semaphore i_sem;     /* 操作inode的信号量 */
+	time_t		i_ctime;
+	unsigned long	i_blksize;
+	unsigned long	i_blocks;
+	struct semaphore i_sem;
 	struct inode_operations * i_op;
-	struct super_block * i_sb;      /*对应的超级块，在inode的读取或查找等操作会用到 */
-	struct wait_queue * i_wait;		/* 操作inode的等待队列 */
-	struct file_lock * i_flock;	    /* 文件锁结构，用于同步或控制 */
-	struct vm_area_struct * i_mmap; /* 该文件映射到的虚拟地址段的地址 */
-	struct inode * i_next, * i_prev;     /*空闲双向链表*/
-	struct inode * i_hash_next, * i_hash_prev; /*hash双向链表*/
+	struct super_block * i_sb;
+	struct wait_queue * i_wait;
+	struct file_lock * i_flock;
+	struct vm_area_struct * i_mmap;
+	struct inode * i_next, * i_prev;
+	struct inode * i_hash_next, * i_hash_prev;
 	struct inode * i_bound_to, * i_bound_by;
-	struct inode * i_mount;		/* inode所在文件系统的挂载点 */
-	struct socket * i_socket;  /*如果是网络inode，则指向网络数据*/
+	struct inode * i_mount;
+	struct socket * i_socket;
 	unsigned short i_count;
 	unsigned short i_flags;
 	unsigned char i_lock;
 	unsigned char i_dirt;
-	unsigned char i_pipe;            /* 表明是管道对应的inode */
+	unsigned char i_pipe;
 	unsigned char i_seek;
 	unsigned char i_update;
-	/* 因为Linux采用的时VFS文件系统，上面数据是所有文件系统都需要使用的数据 
-	 * 下面的数据是相应文件系统对应的特定inode的信息
-	 */
 	union {
 		struct pipe_inode_info pipe_i;
 		struct minix_inode_info minix_i;
@@ -219,25 +204,24 @@ struct inode {
 };
 
 struct file {
-	mode_t f_mode;		    /* 文件不存在时，创建文件的权限 */
+	mode_t f_mode;
 	dev_t f_rdev;			/* needed for /dev/tty */
-	off_t f_pos;            /* 文件读写偏移量 */
-	unsigned short f_flags; /* 以什么样的方式打开文件，如只读，只写等等 */
-	unsigned short f_count;  /*文件的引用计数*/
+	off_t f_pos;
+	unsigned short f_flags;
+	unsigned short f_count;
 	unsigned short f_reada;
 	struct file *f_next, *f_prev;
-	struct inode * f_inode;		/* 文件对应的inode */
+	struct inode * f_inode;
 	struct file_operations * f_op;
 };
 
-/* 文件锁结构，该结构可以用来锁定文件字节中的某一段 */
 struct file_lock {
 	struct file_lock *fl_next;	/* singly linked list */
 	struct task_struct *fl_owner;	/* NULL if on free list, for sanity checks */
         unsigned int fl_fd;             /* File descriptor for this lock */
 	struct wait_queue *fl_wait;
-	char fl_type;			/* 锁的类型 */
-	char fl_whence;			/* 指定起始位置的特点，从头开始，还是当前开始，还是文件末尾 */
+	char fl_type;
+	char fl_whence;
 	off_t fl_start;
 	off_t fl_end;
 };
@@ -252,30 +236,20 @@ struct file_lock {
 #include <linux/xia_fs_sb.h>
 #include <linux/sysv_fs_sb.h>
 
-/* super_block和inode道理一样，除了超级块的公共信息之外，
- * 还包含一些特定文件系统的超级块的数据，该数据是用一个union
- * 来表示的。
- */
 struct super_block {
-	dev_t s_dev;					/*对应设备号*/
-	unsigned long s_blocksize;      /* 设备数据块的大小 */
-	unsigned char s_blocksize_bits; /* 块大小用2的幂次方表示的幂*/
-	unsigned char s_lock;  /* 超级块是否被锁住 */
+	dev_t s_dev;
+	unsigned long s_blocksize;
+	unsigned char s_blocksize_bits;
+	unsigned char s_lock;
 	unsigned char s_rd_only;
-	unsigned char s_dirt;		/* 超级块的脏标记 */
+	unsigned char s_dirt;
 	struct super_operations *s_op;
-	unsigned long s_flags;       /* 超级块的挂载标记 */
+	unsigned long s_flags;
 	unsigned long s_magic;
 	unsigned long s_time;
-	/* 在Linux当中如果要将某个文件系统关在到某个目录
-	  * 则会将挂载目录之前的所有内容给屏蔽掉，也就是看不见 
-	  * 看见的则是挂载之后的文件系统的内容，如果将该挂载的文件 
-	  * 系统卸载掉，则原来被屏蔽掉的内容又会重新显示出来  
-	  */
-	struct inode * s_covered;    
-	struct inode * s_mounted;   /*文件系统的挂载点，如果是根文件系统则是/,否则就是挂载点的inode */
-	struct wait_queue * s_wait; /* 等待操作超级块的进程队列 */
-	/* 注意这部分信息是超级块的物理信息 */
+	struct inode * s_covered;
+	struct inode * s_mounted;
+	struct wait_queue * s_wait;
 	union {
 		struct minix_sb_info minix_sb;
 		struct ext_sb_info ext_sb;
@@ -283,14 +257,12 @@ struct super_block {
 		struct hpfs_sb_info hpfs_sb;
 		struct msdos_sb_info msdos_sb;
 		struct isofs_sb_info isofs_sb;
-		struct nfs_sb_info nfs_sb;		/* 网络文件系统的超级块 */
+		struct nfs_sb_info nfs_sb;
 		struct xiafs_sb_info xiafs_sb;
 		struct sysv_sb_info sysv_sb;
 	} u;
 };
 
-/* 对inode对应文件的操作
- */
 struct file_operations {
 	int (*lseek) (struct inode *, struct file *, off_t, int);
 	int (*read) (struct inode *, struct file *, char *, int);
@@ -304,8 +276,6 @@ struct file_operations {
 	int (*fsync) (struct inode *, struct file *);
 };
 
-/* 对inode的操作
- */
 struct inode_operations {
 	struct file_operations * default_file_ops;
 	int (*create) (struct inode *,const char *,int,int,struct inode **);

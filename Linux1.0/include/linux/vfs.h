@@ -5,8 +5,6 @@ typedef struct {
 	long    val[2];
 } fsid_t;
 
-
-/* 文件系统的信息结构 */
 struct statfs {
 	long f_type;
 	long f_bsize;

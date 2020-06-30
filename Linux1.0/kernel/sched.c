@@ -38,7 +38,6 @@
  * kernel variables
  */
 long tick = 1000000 / HZ;               /* timer interrupt period */
-/* 系统当前时间 */
 volatile struct timeval xtime;		/* The current time */
 int tickadj = 500/HZ;			/* microsecs */
 
@@ -89,9 +88,6 @@ asmlinkage int system_call(void);
 static unsigned long init_kernel_stack[1024];
 struct task_struct init_task = INIT_TASK;
 
-/* 它代表从机器启动时算起的时间滴答数。也就是时钟中断的次数
- * 这个变量最初被初始化为 0，每次时钟中断时都会加 1。
- */
 unsigned long volatile jiffies=0;
 
 struct task_struct *current = &init_task;
@@ -212,9 +208,6 @@ static unsigned long lost_ticks = 0;
  * The "confuse_gcc" goto is used only to get better assembly code..
  * Djikstra probably hates me.
  */
-
-/* 进程调度函数
- */
 asmlinkage void schedule(void)
 {
 	int c;
@@ -231,48 +224,31 @@ asmlinkage void schedule(void)
 	sti();
 	need_resched = 0;
 	p = &init_task;
-	/* 该循环是将可以调度运行的进程设置为运行态，
-	 * 等待函数的下一级段进行具体的选择调度
-	 * 其中还会根据进程运行的时间来向进程发送相关的信号 
-	 */
 	for (;;) {
-        /* 保证进程链表只扫描一圈 */
 		if ((p = p->next_task) == &init_task)
 			goto confuse_gcc1;
 		if (ticks && p->it_real_value) {
-			/* 如果ticks让it_real_value减少为0，则向进程发送SIGALRM信号 */
 			if (p->it_real_value <= ticks) {
 				send_sig(SIGALRM, p, 1);
 				if (!p->it_real_incr) {
 					p->it_real_value = 0;
 					goto end_itimer;
 				}
-				/* 如果it_real_incr不为0，则使it_real_value的值增加到大于ticks为止
-				 */
 				do {
 					p->it_real_value += p->it_real_incr;
 				} while (p->it_real_value <= ticks);
 			}
-			/* 使用it_real_value的值减小ticks */
 			p->it_real_value -= ticks;
 			if (p->it_real_value < itimer_next)
 				itimer_next = p->it_real_value;
 		}
 end_itimer:
-        /* 如果进程是非可中断状态，则在选择调度的程序时，不考虑该进程，
-           * 如进程陷入一种不可中断的睡眠状态，则此时调度程序不可调度该进程
-           */
 		if (p->state != TASK_INTERRUPTIBLE)
 			continue;
-        /* 如果进程接收到了信号，则设置进程的状态为运行态
-           */
 		if (p->signal & ~p->blocked) {
 			p->state = TASK_RUNNING;
 			continue;
 		}
-		/* 如果超过了进程被重新唤醒的时间，则将进程唤醒
-		 * timeout的作用是指间隔多久后将进程重新唤醒 
-		 */
 		if (p->timeout && p->timeout <= jiffies) {
 			p->timeout = 0;
 			p->state = TASK_RUNNING;
@@ -293,23 +269,19 @@ confuse_gcc1:
 #endif
 	c = -1;
 	next = p = &init_task;
-	/* 选择一个合适的进程来运行，通过switch_to来切换 */
 	for (;;) {
 		if ((p = p->next_task) == &init_task)
 			goto confuse_gcc2;
-		/* 只考虑TASK_RUNNING态进程，且动态优先级比之前的要高 
-		 */
 		if (p->state == TASK_RUNNING && p->counter > c)
 			c = p->counter, next = p;
 	}
 confuse_gcc2:
-	/* 此处动态优先级c为0，表示所有进程的动态优先级最高为0 */
 	if (!c) {
 		for_each_task(p)
 			p->counter = (p->counter >> 1) + p->priority;
 	}
 	if(current != next)
-		kstat.context_swtch++; /* 增加内核进程切换次数 */
+		kstat.context_swtch++;
 	switch_to(next);
 	/* Now maybe reload the debug registers */
 	if(current->debugreg[7]){
@@ -346,7 +318,7 @@ void wake_up(struct wait_queue **q)
 	do {
 		if ((p = tmp->task) != NULL) {
 			if ((p->state == TASK_UNINTERRUPTIBLE) ||
-			    (p->state == TASK_INTERRUPTIBLE)) {   /*唯一和wake_up_interruptible差别*/
+			    (p->state == TASK_INTERRUPTIBLE)) {
 				p->state = TASK_RUNNING;
 				if (p->counter > current->counter)
 					need_resched = 1;
@@ -372,12 +344,8 @@ void wake_up_interruptible(struct wait_queue **q)
 		return;
 	do {
 		if ((p = tmp->task) != NULL) {
-			/* 将等待队列中状态为TASK_INTERRUPTIBLE的所有进程状态设置为TASK_RUNNING
-			 * 并等待调度程序调度执行
-			 */
 			if (p->state == TASK_INTERRUPTIBLE) {
 				p->state = TASK_RUNNING;
-				/*如果p进程的优先级高于当前进程的优先级，则在下一个时钟，重新调度进程*/
 				if (p->counter > current->counter)
 					need_resched = 1;
 			}
@@ -390,16 +358,14 @@ void wake_up_interruptible(struct wait_queue **q)
 			break;
 		}
 		tmp = tmp->next;
-	} while (tmp != *q); /*因为等待队列是一个圈*/
+	} while (tmp != *q);
 }
 
 void __down(struct semaphore * sem)
 {
 	struct wait_queue wait = { current, NULL };
 	add_wait_queue(&sem->wait, &wait);
-	/*信号量的处理过程是不可以被打断的*/
 	current->state = TASK_UNINTERRUPTIBLE;
-	/*信号量小于等于0时，表明已经无法在获取信号量了，只能让出cpu*/
 	while (sem->count <= 0) {
 		schedule();
 		current->state = TASK_UNINTERRUPTIBLE;
@@ -408,7 +374,6 @@ void __down(struct semaphore * sem)
 	remove_wait_queue(&sem->wait, &wait);
 }
 
-/*以特定状态休眠，并调用schedule函数，放弃cpu*/
 static inline void __sleep_on(struct wait_queue **p, int state)
 {
 	unsigned long flags;
@@ -437,13 +402,8 @@ void sleep_on(struct wait_queue **p)
 	__sleep_on(p,TASK_UNINTERRUPTIBLE);
 }
 
-/* next_timer为内核时钟，注意对next_timer的操作非常精巧，
- * 例子如下，4个时钟节点，触发时间分别为1,2,4,5
- * 则expire的实际值为 1,1,2,1，也就是触发时间等于前面的所有expire的和
- */
 static struct timer_list * next_timer = NULL;
 
-/* 将时钟添加到列表当中 */
 void add_timer(struct timer_list * timer)
 {
 	unsigned long flags;
@@ -456,13 +416,11 @@ void add_timer(struct timer_list * timer)
 	save_flags(flags);
 	cli();
 	while (*p) {
-		/* timer是按照expires大小依次从小到大排列 */
 		if ((*p)->expires > timer->expires) {
 			(*p)->expires -= timer->expires;
 			timer->next = *p;
 			break;
 		}
-		/* 如果没有找到合适位置，则expires一直减小 */
 		timer->expires -= (*p)->expires;
 		p = &(*p)->next;
 	}
@@ -470,7 +428,6 @@ void add_timer(struct timer_list * timer)
 	restore_flags(flags);
 }
 
-/* 删除时钟链表 */
 int del_timer(struct timer_list * timer)
 {
 	unsigned long flags;
@@ -480,11 +437,8 @@ int del_timer(struct timer_list * timer)
 	p = &next_timer;
 	save_flags(flags);
 	cli();
-	/* 扫描以next_timer为首的链表 */
 	while (*p) {
-		/* 如果在netxt_timer链表中找到该节点 */
 		if (*p == timer) {
-			/* 特别注意这句话就从链表中删除了timer节点 */
 			if ((*p = timer->next) != NULL)
 				(*p)->expires += timer->expires;
 			timer->expires += expires;
@@ -512,13 +466,11 @@ unsigned long avenrun[3] = { 0,0,0 };
 /*
  * Nr of active tasks - counted in fixed-point numbers
  */
-/* 统计活跃进程 */
 static unsigned long count_active_tasks(void)
 {
 	struct task_struct **p;
 	unsigned long nr = 0;
 
-	/* 扫描进程列表，统计状态为就绪态和交换状态，不可中断状态进程数量 */
 	for(p = &LAST_TASK; p > &FIRST_TASK; --p)
 		if (*p && ((*p)->state == TASK_RUNNING ||
 			   (*p)->state == TASK_UNINTERRUPTIBLE ||
@@ -611,15 +563,12 @@ static void second_overflow(void)
 /*
  * disregard lost ticks for now.. We don't care enough.
  */
-
-/* 通过do_bottom_half调用到此处，处理内核时钟 */
 static void timer_bh(void * unused)
 {
 	unsigned long mask;
 	struct timer_struct *tp;
 
 	cli();
-	/* 循环处理时钟列表当中的timer,同时将expires为0的timer触发 */
 	while (next_timer && next_timer->expires == 0) {
 		void (*fn)(unsigned long) = next_timer->function;
 		unsigned long data = next_timer->data;
@@ -629,8 +578,7 @@ static void timer_bh(void * unused)
 		cli();
 	}
 	sti();
-
-	/* 注意timer_table和next_timer的区别 */
+	
 	for (mask = 1, tp = timer_table+0 ; mask ; tp++,mask += mask) {
 		if (mask > timer_active)
 			break;
@@ -650,8 +598,6 @@ static void timer_bh(void * unused)
  * irq uses this to decide if it should update the user or system
  * times.
  */
-
-/* 时钟中断的处理函数 */
 static void do_timer(struct pt_regs * regs)
 {
 	unsigned long mask;
@@ -699,15 +645,13 @@ static void do_timer(struct pt_regs * regs)
 	else
 	    time_adjust_step = 0;
 
-        /* 在时钟中断中修改系统的当前时间 */
 	if (xtime.tv_usec >= 1000000) {
 	    xtime.tv_usec -= 1000000;
 	    xtime.tv_sec++;
 	    second_overflow();
 	}
-	/* 只有在这里才会增加jiffies变量，也就是每个节拍增加1 */
+
 	jiffies++;
-	/* 计算进程负载 */
 	calc_load();
 	if ((VM_MASK & regs->eflags) || (3 & regs->cs)) {
 		current->utime++;
@@ -757,10 +701,8 @@ static void do_timer(struct pt_regs * regs)
 	itimer_ticks++;
 	if (itimer_ticks > itimer_next)
 		need_resched = 1;
-	/* 此时开始处理next_timer列表 */
 	if (next_timer) {
 		if (next_timer->expires) {
-			/* next_timer的expires减小，但为什么只有第一个减小呢? */
 			next_timer->expires--;
 			if (!next_timer->expires)
 				mark_bh(TIMER_BH);
@@ -813,7 +755,6 @@ asmlinkage int sys_getegid(void)
 	return current->egid;
 }
 
-/*更改当前进程的优先级*/
 asmlinkage int sys_nice(long increment)
 {
 	int newprio;
@@ -858,9 +799,6 @@ static void show_task(int nr,struct task_struct * p)
 		printk("\n");
 }
 
-
-/* 显示所有进程
- */ 
 void show_state(void)
 {
 	int i;
@@ -872,13 +810,11 @@ void show_state(void)
 			show_task(i,task[i]);
 }
 
-/* 调度的初始化 */
 void sched_init(void)
 {
 	int i;
 	struct desc_struct * p;
 
-	/* 初始化时钟的下半部分 */
 	bh_base[TIMER_BH].routine = timer_bh;
 	if (sizeof(struct sigaction) != 16)
 		panic("Struct sigaction MUST be 16 bytes");

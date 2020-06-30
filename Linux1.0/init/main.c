@@ -125,12 +125,7 @@ extern void time_init(void);
 
 static unsigned long memory_start = 0;	/* After mem_init, stores the */
 					/* amount of free user memory */
-
-/* 系统内核支持的最大物理和实际物理内存的较小的那个值*/
 static unsigned long memory_end = 0;
-/* 640KB-1MB留给显存了。0xA0000=640KB,当内核大小小于1M时
-  * low_memory_start则指向内核的大小
-  */
 static unsigned long low_memory_start = 0;
 
 static char term[21];
@@ -150,13 +145,10 @@ struct screen_info screen_info;
 
 unsigned char aux_device_present;
 int ramdisk_size;
-
-/* 根文件系统的挂载标记 */
 int root_mountflags = 0;
 
 static char fpu_error = 0;
 
-/*启动命令行初始化为空*/
 static char command_line[80] = { 0, };
 
 char *get_options(char *str, int *ints) 
@@ -334,13 +326,11 @@ static void parse_options(char *line)
 	envp_init[envs+1] = NULL;
 }
 
-/* 此函数主要是根据命令参数获取memory_end的大小 */
 static void copy_options(char * to, char * from)
 {
 	char c = ' ';
-	/* c是命令行的空格参数 */
+
 	do {
-		/* 解析到mem=xxx参数时设置memory_end */
 		if (c == ' ' && !memcmp("mem=", from, 4))
 			memory_end = simple_strtoul(from+4, &from, 0);
 		c = *(to++) = *(from++);
@@ -358,8 +348,6 @@ static void copro_timeout(void)
 	outb_p(0,0xf0);
 }
 
-/* 内核启动函数
- **/
 asmlinkage void start_kernel(void)
 {
 /*
@@ -374,37 +362,27 @@ asmlinkage void start_kernel(void)
 	memory_end = (1<<20) + (EXT_MEM_K<<10);
 	memory_end &= PAGE_MASK;
 	ramdisk_size = RAMDISK_SIZE;
-        /* 通过命令行判断memory_end的位置 */
 	copy_options(command_line,COMMAND_LINE);
-	/*如果配置CONFIG_MAX_16M,则最大内存支持16MB*/
 #ifdef CONFIG_MAX_16M
 	if (memory_end > 16*1024*1024)
 		memory_end = 16*1024*1024;
 #endif
 	if (MOUNT_ROOT_RDONLY)
 		root_mountflags |= MS_RDONLY;
-        /* 如果编译出来的内核大于或等于1M,
-          * end对应于核心的大小
-          */
 	if ((unsigned long)&end >= (1024*1024)) {
-                /* 设置可用内存的起始位置为内核的大小 */
 		memory_start = (unsigned long) &end;
 		low_memory_start = PAGE_SIZE;
 	} else {
-                /* 否则设置内核可用内存的大小为1M */
 		memory_start = 1024*1024;
 		low_memory_start = (unsigned long) &end;
 	}
-        /* 将low_memory_start按照页大小对齐 */
 	low_memory_start = PAGE_ALIGN(low_memory_start);
-        /* 设置swapper_pg_dir页目录表的映射 */
 	memory_start = paging_init(memory_start,memory_end);
 	if (strncmp((char*)0x0FFFD9, "EISA", 4) == 0)
 		EISA_bus = 1;
 	trap_init();
 	init_IRQ();
 	sched_init();
-	/*里面包含较多初始化和设置工作*/
 	parse_options(command_line);
 #ifdef CONFIG_PROFILE
 	prof_buffer = (unsigned long *) memory_start;
@@ -413,20 +391,16 @@ asmlinkage void start_kernel(void)
 	memory_start += prof_len * sizeof(unsigned long);
 #endif
 	memory_start = kmalloc_init(memory_start,memory_end);
-	/*字符设备初始化，包括鼠标，终端啊，声卡等的初始化*/
 	memory_start = chr_dev_init(memory_start,memory_end);
-	/*块设备的初始化，其中包括对硬盘等其他设备的初始化*/
 	memory_start = blk_dev_init(memory_start,memory_end);
 	sti();
 	calibrate_delay();
 #ifdef CONFIG_INET
-	/*网络设备初始化*/
 	memory_start = net_dev_init(memory_start,memory_end);
 #endif
 #ifdef CONFIG_SCSI
 	memory_start = scsi_dev_init(memory_start,memory_end);
 #endif
-	/* struct inode，struct file链表初始化 */
 	memory_start = inode_init(memory_start,memory_end);
 	memory_start = file_table_init(memory_start,memory_end);
 	mem_init(low_memory_start,memory_start,memory_end);
@@ -435,7 +409,6 @@ asmlinkage void start_kernel(void)
 	floppy_init();
 	sock_init();
 #ifdef CONFIG_SYSVIPC
-	//ipc通信初始化
 	ipc_init();
 #endif
 	sti();
@@ -478,8 +451,6 @@ asmlinkage void start_kernel(void)
 	printk(linux_banner);
 
 	move_to_user_mode();
-	/* fork子进程返回0，父进程返回子进程的进程号
-	 */
 	if (!fork())		/* we count on this going ok */
 		init();
 /*
@@ -506,15 +477,10 @@ static int printf(const char *fmt, ...)
 	return i;
 }
 
-/* 该进程是由0号进程创建的，系统中的所有其他进程都是由该
- * 进程创建,在该进程中，首先挂载root文件系统，在该进程当中
- * 创建登录shell进程，然后1进程等待登录进程结束，登录结束之后
- * 给用户创建终端，用户即可进行操作。
- */
 void init(void)
 {
 	int pid,i;
-	/*这个函数里面挂载了根文件系统*/
+
 	setup((void *) &drive_info);
 	sprintf(term, "TERM=con%dx%d", ORIG_VIDEO_COLS, ORIG_VIDEO_LINES);
 	(void) open("/dev/tty1",O_RDWR,0);
@@ -527,20 +493,15 @@ void init(void)
 	/* if this fails, fall through to original stuff */
 
 	if (!(pid=fork())) {
-		/*开始执行登录*/
 		close(0);
 		if (open("/etc/rc",O_RDONLY,0))
 			_exit(1);
 		execve("/bin/sh",argv_rc,envp_rc);
 		_exit(2);
 	}
-	/* 父进程等待子进程登录完成
-	 */
 	if (pid>0)
 		while (pid != wait(&i))
 			/* nothing */;
-	/* 用户登录成功之后，给用户创建一个终端进程
-	 */
 	while (1) {
 		if ((pid = fork()) < 0) {
 			printf("Fork failed in init\n\r");
@@ -548,16 +509,12 @@ void init(void)
 		}
 		if (!pid) {
 			close(0);close(1);close(2);
-            /* 设置子进程为新会话的首进程 */
 			setsid();
 			(void) open("/dev/tty1",O_RDWR,0);
 			(void) dup(0);
 			(void) dup(0);
 			_exit(execve("/bin/sh",argv,envp));
 		}
-		/* 1号进程等待终端进程的操作，直到终端进程结束，
-		 * 终端进程结束之后继续创建另一个终端进程
-		 */
 		while (1)
 			if (pid == wait(&i))
 				break;

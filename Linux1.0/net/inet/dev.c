@@ -102,9 +102,6 @@ static struct packet_type ax25_packet_type = {
 #endif
 
 
-/* arp协议属于网络层协议，arp协议在网络层的处理最终交给
- * arp_rcv处理
- */
 static struct packet_type arp_packet_type = {
   NET16(ETH_P_ARP),
   0,		/* copy */
@@ -125,7 +122,7 @@ static struct packet_type arp_packet_type = {
 #endif
 };
 
-/* ip包类型结构 */
+
 static struct packet_type ip_packet_type = {
   NET16(ETH_P_IP),
   0,		/* copy */
@@ -134,10 +131,8 @@ static struct packet_type ip_packet_type = {
   &arp_packet_type
 };
    
-/* */
-struct packet_type *ptype_base = &ip_packet_type;
 
-/* 全局数据包缓存队列，还有一个队列就是struct sock中的back_log队列  */
+struct packet_type *ptype_base = &ip_packet_type;
 static struct sk_buff *volatile backlog = NULL;
 static unsigned long ip_bcast = 0;
 
@@ -172,15 +167,15 @@ get_mask(unsigned long addr)
   return(0);
 }
 
-/* 匹配ip地址，如果相同则返回1，否则返回0*/
-int ip_addr_match(unsigned long me, unsigned long him)
+
+int
+ip_addr_match(unsigned long me, unsigned long him)
 {
   int i;
   unsigned long mask=0xFFFFFFFF;
   DPRINTF((DBG_DEV, "ip_addr_match(%s, ", in_ntoa(me)));
   DPRINTF((DBG_DEV, "%s)\n", in_ntoa(him)));
 
-	/* 如果两个地址相同则返回> 1 */
   if (me == him) 
   	return(1);
   for (i = 0; i < 4; i++, me >>= 8, him >>= 8, mask >>= 8) {
@@ -189,8 +184,6 @@ int ip_addr_match(unsigned long me, unsigned long him)
 		 * The only way this could be a match is for
 		 * the rest of addr1 to be 0 or 255.
 		 */
-		/* 判断me是不是在0-255范围，
-		  * 0和255是不做判断的*/
 		if (me != 0 && me != mask) return(0);
 		return(1);
 	}
@@ -200,7 +193,6 @@ int ip_addr_match(unsigned long me, unsigned long him)
 
 
 /* Check the address for our address, broadcasts, etc. */
-/* 检查地址类型 */
 int chk_addr(unsigned long addr)
 {
 	struct device *dev;
@@ -255,8 +247,6 @@ int chk_addr(unsigned long addr)
  * al when it doesn't know which address to use (i.e. it does not
  * yet know from or to which interface to go...).
  */
-
-/* 获取本地地址 */
 unsigned long
 my_addr(void)
 {
@@ -272,7 +262,6 @@ my_addr(void)
 static int dev_nit=0; /* Number of network taps running */
 
 /* Add a protocol ID to the list.  This will change soon. */
-/* 添加一个struct packet_type结构到ptype_base链表当中 */
 void
 dev_add_pack(struct packet_type *pt)
 {
@@ -299,11 +288,9 @@ dev_add_pack(struct packet_type *pt)
   /*
    *	NIT taps must go at the end or inet_bh will leak!
    */
-  
-
+   
   if(pt->type==NET16(ETH_P_ALL))
   {
-        /* 将pt添加到末尾 */
   	pt->next=NULL;
   	if(ptype_base==NULL)
 	  	ptype_base=pt;
@@ -319,7 +306,6 @@ dev_add_pack(struct packet_type *pt)
 
 
 /* Remove a protocol ID from the list.  This will change soon. */
-/* 该函数功能和inet_del_protocol函数差不多 */
 void
 dev_remove_pack(struct packet_type *pt)
 {
@@ -351,7 +337,6 @@ dev_remove_pack(struct packet_type *pt)
 
 
 /* Find an interface in the list. This will change soon. */
-/* 根据名称来获取设备 */
 struct device *
 dev_get(char *name)
 {
@@ -494,9 +479,6 @@ dev_queue_xmit(struct sk_buff *skb, struct device *dev, int pri)
  * Receive a packet from a device driver and queue it for the upper
  * (protocol) levels.  It always succeeds.
  */
-
-/* 驱动程序调用 netif_rx 将接收到的数据包缓存于该队列中
-  */
 void
 netif_rx(struct sk_buff *skb)
 {
@@ -594,9 +576,6 @@ dev_transmit(void)
   }
 }
 
-/* 变量in_bh是为了防止重复执行下半部分，即下半部分不允许重入，
- * 从net_bh实现的功能来看，重入很可能造成内核不一致
- */
 static volatile char in_bh = 0;
 
 int in_inet_bh()	/* Used by timer.c */
@@ -609,8 +588,6 @@ int in_inet_bh()	/* Used by timer.c */
  * process any data that came in from some interface.
  *
  */
-
-/* 网络设备的下半部分，通过网络设备的中断运行到这个地方 */
 void
 inet_bh(void *tmp)
 {
@@ -621,8 +598,6 @@ inet_bh(void *tmp)
   int nitcount;
 
   /* Atomically check and mark our BUSY state. */
-
-  /* 将原来的位设置为1，如果原来的位为1，则直接返回 */
   if (set_bit(1, (void*)&in_bh))
       return;
 
@@ -653,7 +628,6 @@ inet_bh(void *tmp)
 	* SLIP and PLIP have no alternative but to force the type to be
 	* IP or something like that.  Sigh- FvK
 	*/
-	/* 获取包的类型，是ip包，arp包 */
        type = skb->dev->type_trans(skb, skb->dev);
 
 	/*
@@ -662,9 +636,6 @@ inet_bh(void *tmp)
 	 * change soon if I get my way- FvK), and forward the packet
 	 * to anyone who wants it.
 	 */
-	/* 扫描所有包类型的链表，然后根据包类型来调用相应的上层函数
-	  * 如ip_rcv，arp_rcv等等，注意这里和网络层向传输层传递的扫描方式有点不一样
-	  */
 	for (ptype = ptype_base; ptype != NULL; ptype = ptype->next) {
 		if (ptype->type == type || ptype->type == NET16(ETH_P_ALL)) {
 			struct sk_buff *skb2;
@@ -694,7 +665,6 @@ inet_bh(void *tmp)
 			flag = 1;
 
 			/* Kick the protocol handler. */
-			/* 调用网络层的ip_rcv函数等等 */
 			ptype->func(skb2, skb->dev, ptype);
 		}
 	}
@@ -991,7 +961,6 @@ dev_ifsioc(void *arg, unsigned int getset)
 
 
 /* This function handles all "interface"-type I/O control requests. */
-/* 设备的IO控制函数 */
 int
 dev_ioctl(unsigned int cmd, void *arg)
 {
@@ -1050,7 +1019,6 @@ dev_ioctl(unsigned int cmd, void *arg)
 
 
 /* Initialize the DEV module. */
-/* 初始化所有的设备 */
 void
 dev_init(void)
 {

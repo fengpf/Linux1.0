@@ -32,8 +32,6 @@ extern int sys_shmget (key_t key, int size, int flag);
 extern int sys_shmat (int shmid, char *shmaddr, int shmflg, ulong *addr);
 extern int sys_shmdt (char *shmaddr);
 
-
-//ipc通信方式的初始化，1-信号量，2-消息队列，3-内存共享
 void ipc_init (void)
 {
 	sem_init();
@@ -45,8 +43,6 @@ void ipc_init (void)
 /* 
  * Check user, group, other permissions for access
  * to ipc resources. return 0 if allowed
- */
-/* 注意查看上面注释，成功返回0
  */
 int ipcperms (struct ipc_perm *ipcp, short flag)
 {	/* flag will most probably be 0 or S_...UGO from <linux/stat.h> */

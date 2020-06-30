@@ -1,17 +1,16 @@
 #ifndef _LINUX_PIPE_FS_I_H
 #define _LINUX_PIPE_FS_I_H
 
-/* 管道文件的inode结构 */
 struct pipe_inode_info {
 	struct wait_queue * wait;
-	char * base;                      /* 管道所对应的内存 */
+	char * base;
 	unsigned int start;
-	unsigned int len;               /* 管道中数据长度 */
-	unsigned int lock;              /* 锁标记 */
+	unsigned int len;
+	unsigned int lock;
 	unsigned int rd_openers;
 	unsigned int wr_openers;
-	unsigned int readers;         /* 读管道的数量 */
-	unsigned int writers;         /* 写管道的数量 */
+	unsigned int readers;
+	unsigned int writers;
 };
 
 #define PIPE_WAIT(inode)	((inode).u.pipe_i.wait)

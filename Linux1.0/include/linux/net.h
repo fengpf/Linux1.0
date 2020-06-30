@@ -43,9 +43,7 @@
 #define SYS_SETSOCKOPT	14		/* sys_setsockopt(2)		*/
 #define SYS_GETSOCKOPT	15		/* sys_getsockopt(2)		*/
 
-/* socket的几种状态 ,
- * 空闲，未连接，已连接，正在连接，正在关闭
- */
+
 typedef enum {
   SS_FREE = 0,				/* not allocated		*/
   SS_UNCONNECTED,			/* unconnected to any socket	*/
@@ -54,7 +52,6 @@ typedef enum {
   SS_DISCONNECTING			/* in process of disconnecting	*/
 } socket_state;
 
-/* 设置socket的flag为监听状态 */
 #define SO_ACCEPTCON	(1<<16)		/* performed a listen		*/
 
 
@@ -69,40 +66,21 @@ typedef enum {
  * wait		sleep for clients,	sleep for connection,
  *		sleep for i/o		sleep for i/o
  */
-/* BSD socket层对应的套接字结构，这是一个通用的套接字结构
- * INET socket层则使用的是sock结构，sock比socket复杂好多
- */
 struct socket {
   short			type;		/* SOCK_STREAM, ...		*/
   socket_state		state;
   long			flags;
-  /* 这里的ops表示struct socket对应的不同协议族的操作函数集合,
-    * 而struct sock中的prot则表示在协议族下面不同协议的函数操作集合 
-    */
   struct proto_ops	*ops;		/* protocols do most everything	*/
-  /* 这就是socket的协议数据，其实就是struct sock结构，
-    * 如果是UNIX协议族，则是struct unix_proto_data结构
-    */
   void			*data;		/* protocol data		*/
-  /* 在INET域中下面两个指针为NULL
-    * 指向建立完全连接的对方 socket 结构,一般指 
-    * 连接的服务端socket 
-    */
   struct socket		*conn;		/* server socket connected to	*/
-  /* 等待建立连接的socket结构，unix协议域的accept函数就是
-    * 通过该链表来判断是否有连接的请求 
-    */
   struct socket		*iconn;		/* incomplete client conn.s	*/
   struct socket		*next;
-  /* 等待使用该socket的进程队列 */
   struct wait_queue	**wait;		/* ptr to place to wait on	*/
   struct inode		*inode;
 };
 
-/* 获取socket中的inode节点 */
 #define SOCK_INODE(S)	((S)->inode)
 
-/* 协议操作函数，其中family代表地址族 */
 struct proto_ops {
   int	family;
 

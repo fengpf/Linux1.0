@@ -179,12 +179,6 @@ build_options(struct iphdr *iph, struct options *opt)
 
 
 /* Take an skb, and fill in the MAC header. */
-/* skb：待创建MAC首部的数据包。
- * daddr：数据包下一站IP地址，注意不同于最终接收端地址。
- * len：IP首部及其负载长度。
- * dev：数据包本地发送设备接口。
- * saddr：本地IP地址。这个参数没有被使用。
- */
 static int
 ip_send(struct sk_buff *skb, unsigned long daddr, int len, struct device *dev,
 	unsigned long saddr)
@@ -194,7 +188,6 @@ ip_send(struct sk_buff *skb, unsigned long daddr, int len, struct device *dev,
 
   ptr = skb->data;
   mac = 0;
-  /* 表示mac数据包已成功创建 */
   skb->arp = 1;
   if (dev->hard_header) {
 	mac = dev->hard_header(ptr, dev, ETH_P_IP, daddr, saddr, len);
@@ -214,10 +207,8 @@ ip_send(struct sk_buff *skb, unsigned long daddr, int len, struct device *dev,
  * protocol knows what it's doing, otherwise it uses the
  * routing/ARP tables to select a device struct.
  */
-/* 构造ip协议的首部和mac协议的首部
- * 函数返回值为mac首部和ip首部总长度
- */
-int ip_build_header(struct sk_buff *skb, unsigned long saddr, unsigned long daddr,
+int
+ip_build_header(struct sk_buff *skb, unsigned long saddr, unsigned long daddr,
 		struct device **dev, int type, struct options *opt, int len, int tos, int ttl)
 {
   static struct options optmem;
@@ -294,9 +285,6 @@ int ip_build_header(struct sk_buff *skb, unsigned long saddr, unsigned long dadd
 }
 
 
-/* iph：IP首部
- * opt：将解析出的选项填入该参数指向的缓冲区中，这个参数是一个options类型的参数
- */
 static int
 do_options(struct iphdr *iph, struct options *opt)
 {
@@ -320,7 +308,6 @@ do_options(struct iphdr *iph, struct options *opt)
   buff = (unsigned char *)(iph + 1);
 
   /* Now start the processing. */
-  /* 开始处理选项数据 */
   while (!done && len < iph->ihl*4) switch(*buff) {
 	case IPOPT_END:
 		done = 1;
@@ -447,8 +434,6 @@ do_options(struct iphdr *iph, struct options *opt)
 
 /* This is a version of ip_compute_csum() optimized for IP headers, which
    always checksum on 4 octet boundaries. */
-
-/* ip校验和的快速计算 */
 static inline unsigned short
 ip_fast_csum(unsigned char * buff, int wlen)
 {
@@ -477,9 +462,6 @@ ip_fast_csum(unsigned char * buff, int wlen)
  * This routine does all the checksum computations that don't
  * require anything special (like copying or special headers).
  */
-
-/* 用于计算ip校验合 */
-
 unsigned short
 ip_compute_csum(unsigned char * buff, int len)
 {
@@ -539,20 +521,8 @@ ip_send_check(struct iphdr *iph)
 
 /************************ Fragment Handlers From NET2E not yet with tweaks to beat 4K **********************************/
 
-
-/* ipqueue变量用于创建ipq结构类型的变量，在前文中我们已经提到ipq结构指向的队列是由
- * ipfrag结构构成的， 每个ipq结构指向的队列及其本身表示一个被分片， 等待重组的数据包；
- * 而ipqueue表示正在重组多个数据包的情况，ipqueue变量指向的每个ipq结构都表示一个正
- * 在等待重组的数据包,注意：ipqueue指向的ipq结构队列中，第一个元素的prev字段指向NULL
- */
-
 static struct ipq *ipqueue = NULL;		/* IP fragment queue	*/
  /* Create a new fragment entry. */
- 
-/* ip_frag_create函数用于创建一个新的ipfrag结构用于表示新接收到的分片数据包。结合
- * ipfrag结构定义，该函数实现非常明显，无需多做说明。需要注意的是调用该函数的其他函
- * 数对相关传入参数的设置。
- */ 
 static struct ipfrag *ip_frag_create(int offset, int end, struct sk_buff *skb, unsigned char *ptr)
 {
    	struct ipfrag *fp;
@@ -580,13 +550,6 @@ static struct ipfrag *ip_frag_create(int offset, int end, struct sk_buff *skb, u
  * Find the correct entry in the "incomplete datagrams" queue for
  * this IP datagram, and return the queue entry address if found.
  */
-/* 在接收到一个新的分片数据包后，内核通过调用ip_find函数查询该分片数据包所对应的
- * ipfrag队列，这个队列的头部有一个ipq结构类型指向，具体请参考上图。ip_find函数输入
- * 的参数是被接收分片数据包的IP首部，通过对IP首部中标识符字段，源，目的IP地址字段以
- * 及上层协议字段进行比较，返回相应的ipq结构。注意540行将定时器清零，调用ip_find函
- * 数的其他函数会相应的对定时器进行进一步的处理。所以540行代码并非十分重要。没有也
- * 可以，下面在分析到ip_defrag函数时，读者即会看到这一点。
- */
 static struct ipq *ip_find(struct iphdr *iph)
 {
 	struct ipq *qp;
@@ -596,7 +559,6 @@ static struct ipq *ip_find(struct iphdr *iph)
 	qplast = NULL;
 	for(qp = ipqueue; qp != NULL; qplast = qp, qp = qp->next) 
 	{
-	    /* 注意这里的判断条件 */
  		if (iph->id== qp->iph->id && iph->saddr == qp->iph->saddr &&
 			iph->daddr == qp->iph->daddr && iph->protocol == qp->iph->protocol) 
 		{
@@ -616,11 +578,6 @@ static struct ipq *ip_find(struct iphdr *iph)
  * it timed out.
  */
 
-/* 释放ipq中间的一个节点以及节点对应的struct ipfrag链表 
- * ip_free对由一个ipq指向的分片队列中各分片进行释放。参数qp即表示这个ipq结构。释放
- * 的原因可能因为所有分片都已到达， 而且已经完成分片重组， 或者是在定时器到期之前没有
- * 接收到需要的其他分片数据包（即极有可能发生分片数据包丢失
- */
 static void ip_free(struct ipq *qp)
 {
 	struct ipfrag *fp;
@@ -632,7 +589,6 @@ static void ip_free(struct ipq *qp)
 
 	/* Remove this entry from the "incomplete datagrams" queue. */
 	cli();
-    /* 如果qp->prev为NULL,则说明释放的是ipqueue指向的这个节点 */
 	if (qp->prev == NULL) 
 	{
 	 	ipqueue = qp->next;
@@ -641,7 +597,6 @@ static void ip_free(struct ipq *qp)
    	} 
    	else 
    	{
-   	    /* 将qp从双向链表当中删除 */
  		qp->prev->next = qp->next;
  		if (qp->next != NULL) 
  			qp->next->prev = qp->prev;
@@ -675,23 +630,7 @@ static void ip_free(struct ipq *qp)
  
  
  /* Oops- a fragment queue timed out.  Kill it and send an ICMP reply. */
-
-/* 对于数据包重组内核设置有一个定时器， 如果定时器到期这段时间间隔内，
- * 没有接收到其他数据包， 就表示可能分片数据包传输出现问题， 我们不能永久等待一个可能
- * 永远无法到达的分片数据包，所以如果定时器超时，就对分片数据包队列进行释放。以防系
- * 统资源（被分片使用的内存空间等）被永久保留，从而造成资源不可用。而每当接收到一个
- * 新的分片数据包后，都会对定时器进行重置。换句话说，如果分片在规定的时间内到达，是
- * 不会发生定时器超时事件的。一旦发生定时器超时事件，就调用ip_expire函数进行处理，
- * 对目前接收到的分片数据包进行释放， 从而释放表示这些分片所使用的内存空间。 具体的释
- * 放工作是通过调用ip_free函数完成的。 606-608行代码发送一个ICMP错误报文， 表示分片数
- * 据包重组超时。
- * 每个ipq结构对应一个带重组的分片数据包队列以及相关辅助工具，如定时器，所以定时器
- * 的设置是在ipq结构中完成的， 这一点也可以从ipq结构的定义看出， 而且我们知道每当接收
- * 到一个新的分片数据包，该定时器都会被重置，直到接收到所有的分片。但是定时器的设置
- * 是在何处完成的呢？下面介绍的ip_create函数将给出答案。 ip_create函数用于最初接收到
- * 一个分片数据包时，创建一个ipq结构来对将要到达的其他分片进行缓存，定时器的设置即
- * 在该函数中进行
- */
+ 
 static void ip_expire(unsigned long arg)
 {
    	struct ipq *qp;
@@ -705,7 +644,6 @@ static void ip_expire(unsigned long arg)
  		    ICMP_EXC_FRAGTIME, qp->iph);
 #endif 		 
  	if(qp->fragments!=NULL)
-        /* 发送一个报错的报文 */
  		icmp_send(qp->fragments->skb,ICMP_TIME_EXCEEDED,
  				ICMP_EXC_FRAGTIME, qp->dev);
  
@@ -721,10 +659,6 @@ static void ip_expire(unsigned long arg)
  * will insert the received fragments at their respective positions.
  */
 
-/* 当IP协议模块检查到接收到了一个分片数据包， 而且尚无对应的ipq结构， 则调用ip_create
- * 函数创建一个ipq结构用于此后的分片数据包缓存。参数skb表示接收到的分片数据包，iph
- * 表示分片数据包的IP首部，dev表示接收该分片数据包的网络设备。
- */
 static struct ipq *ip_create(struct sk_buff *skb, struct iphdr *iph, struct device *dev)
 {
   	struct ipq *qp;
@@ -737,8 +671,6 @@ static struct ipq *ip_create(struct sk_buff *skb, struct iphdr *iph, struct devi
 		printk("IP: create: no memory left !\n");
 		return(NULL);
   	}
-    
-    /* 对数据进行清空 */
  	memset(qp, 0, sizeof(struct ipq));
 
   	/* Allocate memory for the MAC header. */
@@ -773,14 +705,12 @@ static struct ipq *ip_create(struct sk_buff *skb, struct iphdr *iph, struct devi
 /*  	printk("Protocol = %d\n",qp->iph->protocol);*/
 	
   	/* Start a timer for this entry. */
-    /* 设置队列的时钟 */
   	qp->timer.expires = IP_FRAG_TIME;		/* about 30 seconds	*/
   	qp->timer.data = (unsigned long) qp;		/* pointer to queue	*/
   	qp->timer.function = ip_expire;			/* expire function	*/
   	add_timer(&qp->timer);
 
   	/* Add this entry to the queue. */
-    /* 将新创建的一个ipq添加到ipqueue队列的首部 */
   	qp->prev = NULL;
   	cli();
   	qp->next = ipqueue;
@@ -793,8 +723,6 @@ static struct ipq *ip_create(struct sk_buff *skb, struct iphdr *iph, struct devi
  
  
  /* See if a fragment queue is complete. */
-
-/* 检查所有分片是否已经到达 */
 static int ip_done(struct ipq *qp)
 {
 	struct ipfrag *fp;
@@ -821,7 +749,6 @@ static int ip_done(struct ipq *qp)
  
  
 /* Build a new IP datagram from all its fragments. */
-/* 根据数据分片重新产生一个ip数据报，也就是数据重组 */
 static struct sk_buff *ip_glue(struct ipq *qp)
 {
 	struct sk_buff *skb;
@@ -887,9 +814,6 @@ static struct sk_buff *ip_glue(struct ipq *qp)
  
 
 /* Process an incoming IP datagram fragment. */
-/* 如果该函数返回NULL，就表示分片数据包尚未到达完整，还要等待其他分片
- * 的进一步到达 
- */
 static struct sk_buff *ip_defrag(struct iphdr *iph, struct sk_buff *skb, struct device *dev)
 {
 	struct ipfrag *prev, *next;
@@ -1023,8 +947,7 @@ static struct sk_buff *ip_defrag(struct iphdr *iph, struct sk_buff *skb, struct 
     	 * Check if we now have a full IP datagram which we can
     	 * bump up to the IP layer...
     	 */
-
-    /* 判断数据分片是否完整，如果完整，则重新生成一个数据报并返回 */
+   
    	if (ip_done(qp)) 
    	{
  		skb2 = ip_glue(qp);		/* glue together the fragments */
@@ -1041,10 +964,6 @@ static struct sk_buff *ip_defrag(struct iphdr *iph, struct sk_buff *skb, struct 
   * single device frame, and queue such a frame for sending by calling the
   * ip_queue_xmit().  Note that this is recursion, and bad things will happen
   * if this function causes a loop...
-  */
- /* 函数负责对大的数据包进行分片,如果是本地发送的
-  * 数据包，则is_frag参数被设置为0；如果是转发的数据包，则is_frag参数表示被转发数据
-  * 包是否本身就是一个分片
   */
  void ip_fragment(struct sock *sk, struct sk_buff *skb, struct device *dev, int is_frag)
  {
@@ -1074,7 +993,6 @@ static struct sk_buff *ip_defrag(struct iphdr *iph, struct sk_buff *skb, struct 
    	DPRINTF((DBG_IP, " DST=%s\n", in_ntoa(iph->daddr)));
  
    	/* Check for any "DF" flag. */
-        /* 如果ip包不允许分片，则使用icmp发送不可分片错误 */
    	if (ntohs(iph->frag_off) & IP_DF) 
    	{
  		DPRINTF((DBG_IP, "IP: Fragmentation Desired, but DF set !\n"));
@@ -1096,7 +1014,6 @@ static struct sk_buff *ip_defrag(struct iphdr *iph, struct sk_buff *skb, struct 
 	  offset = (ntohs(iph->frag_off) & 0x1fff) << 3;
 	else
    	  offset = 0;
-        /* 将一个大的数据包分多个数据包发送 */
    	while(left > 0) 
    	{
  		len = left;
@@ -1157,7 +1074,6 @@ static struct sk_buff *ip_defrag(struct iphdr *iph, struct sk_buff *skb, struct 
 /* 		printk("Queue frag\n");*/
  
  		/* Put this fragment into the sending queue. */
-                /* 发送分片后的每个数据片 */
  		ip_queue_xmit(sk, dev, skb2, 1);
 /* 		printk("Queued\n");*/
    	}
@@ -1168,13 +1084,6 @@ static struct sk_buff *ip_defrag(struct iphdr *iph, struct sk_buff *skb, struct 
 #ifdef CONFIG_IP_FORWARD
 
 /* Forward an IP datagram to its next destination. */
-/* skb：被转发数据包。
- * dev：接收该被转发数据包的网络设备。函数将用以判断是否需要进行ICMP重定向报文的发
- * 送。is_frag：表示被转发数据包是否为一个分片数据包，以及分片所处的位置。当is_frag&1
- * 为真时，表示这是一个位置处于中间的分片数据包；当is_frag&2为真时，表示这是一个位
- * 置处于最后的分片数据包；由于ip_rcv函数实现的缺陷，没有对第一个分片进行判断，所以
- * 此处也就无法表示位置处于最前的第一个分片数据包。
- */
 static void
 ip_forward(struct sk_buff *skb, struct device *dev, int is_frag)
 {
@@ -1298,14 +1207,12 @@ ip_forward(struct sk_buff *skb, struct device *dev, int is_frag)
 #endif
 
 /* This function receives all incoming IP datagrams. */
-/* 该函数在链路层被调用 */
 int
 ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
 {
   struct iphdr *iph = skb->h.iph;
   unsigned char hash;
-  /* 标记，表示该skb能够顺利交给上层处理，如果不能交给上层处理，则发送不可达错误 */
-  unsigned char flag = 0;         
+  unsigned char flag = 0;
   unsigned char opts_p = 0;	/* Set iff the packet has options. */
   struct inet_protocol *ipprot;
   static struct options opt; /* since we don't use these yet, and they
@@ -1326,7 +1233,6 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
 	return(0);
   }
   
-  /* 如果携带有额外数据 */
   if (iph->ihl != 5) {  	/* Fast path for the typical optionless IP packet. */
       ip_print(iph);		/* Bogus, only for debugging. */
       memset((char *) &opt, 0, sizeof(opt));
@@ -1356,11 +1262,10 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
   /*
    * Reassemble IP fragments. 
    */
-  /* 如果是一个分片数据包 */
+
   if(is_frag)
   {
 #ifdef CONFIG_IP_DEFRAG
-        /* 如果分片数据包不完整，也就是返回为NULL，则直接返回 */
         skb=ip_defrag(iph,skb,dev);
         if(skb==NULL)
         {
@@ -1392,11 +1297,8 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
   /* Point into the IP datagram, just past the header. */
 
   skb->ip_hdr = iph;
-  /* h.raw记录头部之后的TCP数据 */
   skb->h.raw += iph->ihl*4;
   hash = iph->protocol & (MAX_INET_PROTOS -1);
-
-  /* 通过这个循环调用到上层的tcp_rcv函数 */
   for (ipprot = (struct inet_protocol *)inet_protos[hash];
        ipprot != NULL;
        ipprot=(struct inet_protocol *)ipprot->next)
@@ -1412,13 +1314,7 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
 	* only be set if more than one protocol wants it. 
 	* and then not for the last one.
 	*/
-       /* 执行到这表示传输层协议相同，如果有copy位，
-         * 则表示在网络层想传输层传递数据时，不止一个 
-         * 协议需要该数据包，注意这是在一个for循环当中， 
-         * 会将数据包发送给所有协议相同的上传协议 
-         */
        if (ipprot->copy) {
-                /* 重新要分配一个skb */
 		skb2 = alloc_skb(skb->mem_len, GFP_ATOMIC);
 		if (skb2 == NULL) 
 			continue;
@@ -1432,12 +1328,10 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
 				(unsigned long)skb2 +
 				(unsigned long) skb->h.raw -
 				(unsigned long)skb);
-                /* 表明无需缓存 */
 		skb2->free=1;
 	} else {
 		skb2 = skb;
 	}
-        /* 可以正常交给上层协议处理 */
 	flag = 1;
 
        /*
@@ -1445,10 +1339,6 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
 	* based on the datagram protocol.  We should really
 	* check the protocol handler's return values here...
 	*/
-
-        /* 此处开始调用到tcp_rcv函数，此处处理的是skb2，
-          * 如果有copy位，则重新复制一个skb，
-          */
 	ipprot->handler(skb2, dev, opts_p ? &opt : 0, iph->daddr,
 			(ntohs(iph->tot_len) - (iph->ihl * 4)),
 			iph->saddr, 0, ipprot);
@@ -1461,7 +1351,6 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
    * causes (proven, grin) ARP storms and a leakage of memory (i.e. all
    * ICMP reply messages get queued up for transmission...)
    */
-  /* 没有合适的传输层处理函数 */
   if (!flag) {
 	if (brd != IS_BROADCAST)
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PROT_UNREACH, dev);
@@ -1480,25 +1369,6 @@ ip_rcv(struct sk_buff *skb, struct device *dev, struct packet_type *pt)
  * This routine also needs to put in the total length, and
  * compute the checksum.
  */
-
-/* ip_queue_xmit函数作为数据包发送函数，被网络层和传输层协议共同调用。如果说ip_rcv
- * 是数据包上行通道函数，那么ip_queue_xmit就是数据包下行通道函数。在完成一个数据桢
- * 的创建后，ip_queue_xmit函数即被调用将数据包发往下层（链路层，通过调用
- * dev_queue_xmit函数）进行处理。所以ip_queue_xmit是通往链路层的功能接口函数，所处
- * 的位置和工作十分重要。在分析ip_fragment函数时，每当完成一个分片的创建，
- * ip_queue_xmit就被调用，将这个被创建分片发送出去。而在TCP协议，UDP协议中，
- * ip_queue_xmit函数则被调用的相当频繁，在这些协议实现文件中，调用时通过函数指针完
- * 成的，tcp_prot->queue_xmit, udp_prot->queue_xmit都指向ip_queue_xmit函数，而ICMP
- * 协议实现中， 数据包的发送则是直接调用ip_queue_xmit函数。 下面我们就对ip_queue_xmit
- * 函数进行分析。
- * 参数说明：
- * sk：被发送数据包对应的套接字。
- * dev：发送数据包的网络设备。
- * skb：被发送的数据包。
- * free：是否对数据包进行缓存以便于此后的超时重发，该字段主要配合TCP协议工作。UDP
- * 协议，ICMP协议等在调用ip_queue_xmit时将该参数设置为1。
- * 在函数的最后最终交给对应的设备去发送了
- */
 void
 ip_queue_xmit(struct sock *sk, struct device *dev, 
 	      struct sk_buff *skb, int free)
@@ -1506,9 +1376,6 @@ ip_queue_xmit(struct sock *sk, struct device *dev,
   struct iphdr *iph;
   unsigned char *ptr;
 
-  /* 如果数据包无对应套接字，则将free参数设置为1，因为没有对应sock结构，则无法对数据
-    * 包进行缓存， 所以在将数据包发往下层后， 释放数据包 
-    */
   if (sk == NULL) free = 1;
   if (dev == NULL) {
 	printk("IP: ip_queue_xmit dev = NULL\n");
@@ -1526,7 +1393,6 @@ ip_queue_xmit(struct sock *sk, struct device *dev,
   skb->ip_hdr = iph;
   iph->tot_len = ntohs(skb->len-dev->hard_header_len);
 
-  /* 如果超过最大传输单元，则一定要分片 */
   if(skb->len > dev->mtu)
   {
 /*  	printk("Fragment!\n");*/
@@ -1542,7 +1408,6 @@ ip_queue_xmit(struct sock *sk, struct device *dev,
 
   /* See if this is the one trashing our queue. Ross? */
   skb->magic = 1;
-  /* free=0表示要将发送的skb插入到已发送但还没有确认的队列上，等待下次超时重发 */
   if (!free) {
 	skb->link3 = NULL;
 	sk->packets_out++;
@@ -1630,7 +1495,6 @@ ip_do_retransmit(struct sock *sk, int all)
 	}
 
 oops:	retransmits++;
-        /* 增加协议超时重传的次数 */
 	sk->prot->retransmits ++;
 	if (!all) break;
 
@@ -1647,7 +1511,6 @@ oops:	retransmits++;
  * initiating a backoff.
  */
 
-/* ip协议的超时重传函数 */
 void
 ip_retransmit(struct sock *sk, int all)
 {
@@ -1675,9 +1538,6 @@ ip_retransmit(struct sock *sk, int all)
 /*
  *	Socket option code for IP. This is the end of the line after any TCP,UDP etc options on
  *	an IP socket.
- */
-
-/* ip层套接口的设置  
  */
  
 int ip_setsockopt(struct sock *sk, int level, int optname, char *optval, int optlen)

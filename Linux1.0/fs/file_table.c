@@ -11,8 +11,6 @@
 struct file * first_file;
 int nr_files = 0;
 
-/* 将file插入到链尾
- **/
 static void insert_file_free(struct file *file)
 {
 	file->f_next = first_file;
@@ -22,9 +20,6 @@ static void insert_file_free(struct file *file)
 	first_file = file;
 }
 
-/* 将文件指针从空闲链表中移除，并始终让first_file指向链首
- * 并将移除的file前后指向都指空
- */
 static void remove_file_free(struct file *file)
 {
 	if (first_file == file)
@@ -36,7 +31,6 @@ static void remove_file_free(struct file *file)
 	file->f_next = file->f_prev = NULL;
 }
 
-/* 将file放在以first_file为首的末尾     */
 static void put_last_free(struct file *file)
 {
 	remove_file_free(file);
@@ -71,12 +65,6 @@ unsigned long file_table_init(unsigned long start, unsigned long end)
 	return start;
 }
 
-/* 获取一个空的文件描述符，注意增长的文件描述符
- * 并没有被释放，但是增长的总数不会超过NR_FILE
- * 释放文件描述符就是将f->f_count=0,然后循环查找f_count=0的
- * 描述符重复利用，该函数非阻塞，如果内存中使用的file
- * 数量大于NR_FILE，则返回失败
- */
 struct file * get_empty_filp(void)
 {
 	int i;
@@ -99,4 +87,3 @@ repeat:
 	}
 	return NULL;
 }
-

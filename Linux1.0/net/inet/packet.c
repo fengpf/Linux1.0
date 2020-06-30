@@ -148,7 +148,7 @@ packet_write(struct sock *sk, unsigned char *buff,
   return(packet_sendto(sk, buff, len, noblock, flags, NULL, 0));
 }
 
-/* packet套接字的关闭函数 */
+
 static void
 packet_close(struct sock *sk, int timeout)
 {
@@ -160,15 +160,12 @@ packet_close(struct sock *sk, int timeout)
   release_sock(sk);
 }
 
-/* packet协议初始化 */
+
 static int
 packet_init(struct sock *sk)
 {
   struct packet_type *p;
 
-  /* 注意RAW套接字创建的则是网络层到传输层的struct inet_protocol，
-    * 而packet类型协议，则新建的是链路层到网络层的struct packet_type结构 
-    */
   p = (struct packet_type *) kmalloc(sizeof(*p), GFP_KERNEL);
   if (p == NULL) return(-ENOMEM);
 

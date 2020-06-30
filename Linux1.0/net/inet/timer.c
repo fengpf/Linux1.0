@@ -49,8 +49,6 @@
 #include "sock.h"
 #include "arp.h"
 
-
-/* 将struct sock中的时钟删除，同时将sock的timerout置为0 */
 void
 delete_timer (struct sock *t)
 {
@@ -65,10 +63,6 @@ delete_timer (struct sock *t)
   restore_flags (flags);
 }
 
-/* 重置struct sock的timer，同时将sock的timerout置为timeout
- * 具体操作过程是先删除后添加，
- * len表示timer的触发时间
- */
 void
 reset_timer (struct sock *t, int timeout, unsigned long len)
 {
@@ -92,27 +86,18 @@ reset_timer (struct sock *t, int timeout, unsigned long len)
  * something, but we must be sure to process all of the
  * sockets that need it.
  */
-
-/* 每个struct sock的时钟函数 */
 void
 net_timer (unsigned long data)
 {
   struct sock *sk = (struct sock*)data;
-  /* 相当于获取时钟的类型吧， */
   int why = sk->timeout;
   /* timeout is overwritten by 'delete_timer' and 'reset_timer' */
 
-  /* 判断sock是否已被其他进程使用，或者当前是否正在执行网络的下半部分，
-    * 如果当前正在执行网络的下半部分，则重新设置sock的timer，同时添加到
-    * 内核时钟当中，等待下次执行 
-    */
   if (sk->inuse || in_inet_bh()) {
     sk->timer.expires = 10;
     add_timer(&sk->timer);
     return;
   }
-
-  /* 设置sock为用 */
   sk->inuse = 1;
 
   DPRINTF ((DBG_TMR, "net_timer: found sk=%X why = %d\n", sk, why));
@@ -126,9 +111,7 @@ net_timer (unsigned long data)
     reset_timer (sk, TIME_KEEPOPEN, TCP_TIMEOUT_LEN);
 
   /* Always see if we need to send an ack. */
-  /* 看看还有没有收到的数据包没有应答 */
   if (sk->ack_backlog) {
-    /* sock发送确认数据包*/
     sk->prot->read_wakeup (sk);
     if (! sk->dead)
       wake_up_interruptible (sk->sleep);
@@ -148,7 +131,6 @@ net_timer (unsigned long data)
 	/* We've waited for a while for all the memory associated with
 	 * the socket to be freed.  We need to print an error message.
 	 */
-	/* 如果sock的发送缓冲区和接收缓冲区都为空，则直接在后面的语句当中释放 */
 	if(sk->wmem_alloc!=0 || sk->rmem_alloc!=0)
 	{
 		DPRINTF ((DBG_TMR, "possible memory leak.  sk = %X\n", sk));
@@ -172,11 +154,11 @@ net_timer (unsigned long data)
 	reset_timer (sk, TIME_DESTROY, TCP_DONE_TIME);
 	release_sock (sk);
 	break;
-    case TIME_PROBE0:   /* 窗口探测定时器，也被称为坚持定时器 */
+    case TIME_PROBE0:
 	tcp_send_probe0(sk);
 	release_sock (sk);
 	break;
-    case TIME_WRITE:	/* 超时重传定时器 */   /* try to retransmit. */
+    case TIME_WRITE:	/* try to retransmit. */
 	/* It could be we got here because we needed to send an ack.
 	 * So we need to check for that.
 	 */
@@ -190,7 +172,6 @@ net_timer (unsigned long data)
 	  /* printk("timer: seq %d retrans %d out %d cong %d\n", sk->send_head->h.seq,
 	     sk->retransmits, sk->packets_out, sk->cong_window); */
 	  DPRINTF ((DBG_TMR, "retransmitting.\n"));
-          /* 调用tcp协议的超时重传函数 */
 	  sk->prot->retransmit (sk, 0);
 	  if ((sk->state == TCP_ESTABLISHED && sk->retransmits && !(sk->retransmits & 7))
 	    || (sk->state != TCP_ESTABLISHED && sk->retransmits > TCP_RETR1)) {
@@ -213,11 +194,11 @@ net_timer (unsigned long data)
 	}
 	release_sock (sk);
 	break;
-    case TIME_KEEPOPEN:          /* 保活定时器 */
+    case TIME_KEEPOPEN:
 	/* Send something to keep the connection open. */
 	if (sk->prot->write_wakeup)
 	  sk->prot->write_wakeup (sk);
-	sk->retransmits++;  /* 因为是重发定时，所以会增加超时重发次数 */
+	sk->retransmits++;
 	if (sk->shutdown == SHUTDOWN_MASK) {
 	  sk->prot->close (sk, 1);
 	  sk->state = TCP_CLOSE;

@@ -48,18 +48,9 @@ extern int check_mcd_media_change(int, int);
 
 static int grow_buffers(int pri, int size);
 
-/* 缓存机制是将物理内存块，映射到相应的缓冲头，如果缓冲头没有，
- * 则去申请一页的缓冲头，并且用unused_list来指向，当需要缓冲头时
- * 则会从unused_list链表中去取，然后将映射好的缓冲头依次添加到
- * free_list对应的双向链表当中
- */
 static struct buffer_head * hash_table[NR_HASH];
-static struct buffer_head * free_list = NULL;      
+static struct buffer_head * free_list = NULL;
 static struct buffer_head * unused_list = NULL;
-
-/* 该队列是等待使用缓存的队列，当申请使用缓存而无法满足时getblk，
- * 则在该队列中等待，当释放缓存时，则唤醒等待使用缓存的进程(brelse)
- */
 static struct wait_queue * buffer_wait = NULL;
 
 int nr_buffers = 0;
@@ -98,9 +89,6 @@ repeat:
    return until all buffer writes have completed.  Sync() may return
    before the writes have finished; fsync() may not. */
 
-/* 将设备dev在缓存中的数据全部写回到设备，
- * wait大于0，则表示阻塞，否则非阻塞
- */
 static int sync_buffers(dev_t dev, int wait)
 {
 	int i, retry, pass = 0, err = 0;
@@ -167,7 +155,6 @@ void sync_dev(dev_t dev)
 	sync_buffers(dev, 0);
 }
 
-/* 同步设备 */
 int fsync_dev(dev_t dev)
 {
 	sync_buffers(dev, 0);
@@ -201,8 +188,6 @@ asmlinkage int sys_fsync(unsigned int fd)
 	return 0;
 }
 
-/* 更改设备dev的所有缓存标记
- */
 void invalidate_buffers(dev_t dev)
 {
 	int i;
@@ -294,10 +279,6 @@ void check_disk_change(dev_t dev)
 #define _hashfn(dev,block) (((unsigned)(dev^block))%NR_HASH)
 #define hash(dev,block) hash_table[_hashfn(dev,block)]
 
-/* 和inode中的hash结构差不多,
-  * 将bh从hash链表的第一项删除，同时将自己所在的hash链表
-  * 中删除删除
-  */
 static inline void remove_from_hash_queue(struct buffer_head * bh)
 {
 	if (bh->b_next)
@@ -309,8 +290,6 @@ static inline void remove_from_hash_queue(struct buffer_head * bh)
 	bh->b_next = bh->b_prev = NULL;
 }
 
-/* 将bh从free_list当中移除
- */
 static inline void remove_from_free_list(struct buffer_head * bh)
 {
 	if (!(bh->b_prev_free) || !(bh->b_next_free))
@@ -322,15 +301,12 @@ static inline void remove_from_free_list(struct buffer_head * bh)
 	bh->b_next_free = bh->b_prev_free = NULL;
 }
 
-/* 将bh从hash链表和free_list链表中删除
- */
 static inline void remove_from_queues(struct buffer_head * bh)
 {
 	remove_from_hash_queue(bh);
 	remove_from_free_list(bh);
 }
-/* 将bh放置在链首，然后让free_list指向bh
-  */
+
 static inline void put_first_free(struct buffer_head * bh)
 {
 	if (!bh || (bh == free_list))
@@ -344,8 +320,6 @@ static inline void put_first_free(struct buffer_head * bh)
 	free_list = bh;
 }
 
-/* 将bh放在以firee_list为首的最后一个
- */
 static inline void put_last_free(struct buffer_head * bh)
 {
 	if (!bh)
@@ -362,12 +336,6 @@ static inline void put_last_free(struct buffer_head * bh)
 	free_list->b_prev_free = bh;
 }
 
-/* 将bh插入到free_list的最后一个，
-  * 因为查找空闲都是从free_list的第一个开始
-  * 查找的，而查找已经映射的dev，block，size时，
-  * 则是从hash表的第一项开始的，
-  * 所以将其插入到hash链的链首
-  */
 static inline void insert_into_queues(struct buffer_head * bh)
 {
 /* put at end of free list */
@@ -386,10 +354,6 @@ static inline void insert_into_queues(struct buffer_head * bh)
 		bh->b_next->b_prev = bh;
 }
 
-/* 从缓冲hash链中查找满足dev，block，size的缓冲块
- * 注意此处并没有多链表进行处理，只是做了判断比较
- * 使用的方法是在hash链表中查找
- */
 static struct buffer_head * find_buffer(dev_t dev, int block, int size)
 {		
 	struct buffer_head * tmp;
@@ -428,8 +392,6 @@ struct buffer_head * get_hash_table(dev_t dev, int block, int size)
 	}
 }
 
-/* 设置设备数据块的大小，dev包含设备的主设备号，次设备号
- */
 void set_blocksize(dev_t dev, int size)
 {
 	int i;
@@ -449,8 +411,6 @@ void set_blocksize(dev_t dev, int size)
 	}
 	if (blksize_size[MAJOR(dev)][MINOR(dev)] == size)
 		return;
-
-	/* 如果设备的数据块大小发生了更改，则将之前的文件都写入到设备 */
 	sync_buffers(dev, 2);
 	blksize_size[MAJOR(dev)][MINOR(dev)] = size;
 
@@ -483,12 +443,6 @@ void set_blocksize(dev_t dev, int size)
  * 14.02.92: changed it to sync dirty buffers a bit: better performance
  * when the filesystem starts to get full of dirty blocks (I hope).
  */
-
-/* 注意该函数获取对应设备dev，block，size
-  * 大小的高速缓存，如果在查找的过程当中
-  * 没有找到相应的高速缓存，则会去grow_buffer
-  * 注意此函数是一个阻塞式的函数，block为设备的逻辑块号，size为设备的块大小
-  */
 #define BADNESS(bh) (((bh)->b_dirt<<1)+(bh)->b_lock)
 struct buffer_head * getblk(dev_t dev, int block, int size)
 {
@@ -511,8 +465,6 @@ repeat:
 	buffers = nr_buffers;
 	bh = NULL;
 
-	/* 扫描整个缓冲链
-	 */
 	for (tmp = free_list; buffers-- > 0 ; tmp = tmp->b_next_free) {
 		if (tmp->b_count || tmp->b_size != size)
 			continue;
@@ -520,7 +472,6 @@ repeat:
 			continue;
 		if (!bh || BADNESS(tmp)<BADNESS(bh)) {
 			bh = tmp;
-			/*既是干净的也没有被锁住，则该缓冲块满足条件*/
 			if (!BADNESS(tmp))
 				break;
 		}
@@ -551,19 +502,10 @@ repeat:
 	}
 /* NOTE!! While we slept waiting for this block, somebody else might */
 /* already have added "this" block to the cache. check it */
-
-/* 注意此处是如果找到了，则继续repeat，
-  * 然后将找到条件的高速缓存给返回，
-  * 注意上面的英文注释
-  */
 	if (find_buffer(dev,block,size))
 		goto repeat;
 /* OK, FINALLY we know that this buffer is the only one of its kind, */
 /* and that it's unused (b_count=0), unlocked (b_lock=0), and clean */
-
-/* 此时确定可以使用该高速缓存，
-  * 然后设置引用计数，脏设备号，块号等标记
-  */
 	bh->b_count=1;
 	bh->b_dirt=0;
 	bh->b_uptodate=0;
@@ -575,17 +517,12 @@ repeat:
 	return bh;
 }
 
-/* 释放缓冲头，仅仅是减少b_count，
- * 如getblk找到后由于某种原因又用不到该缓冲块
- */
 void brelse(struct buffer_head * buf)
 {
 	if (!buf)
 		return;
 	wait_on_buffer(buf);
 	if (buf->b_count) {
-		/* 如果b_count==1则以为没有其他进程用到它
-		 */
 		if (--buf->b_count)
 			return;
 		wake_up(&buffer_wait);
@@ -597,13 +534,6 @@ void brelse(struct buffer_head * buf)
 /*
  * bread() reads a specified block and returns the buffer that contains
  * it. It returns NULL if the block was unreadable.
- */
-
-/* 将设备中指定的块数据读取到高速缓存
- * 在将设备中指定块数据读取到高速缓存之前
- * 会在高速缓冲当中查找该块是否已经读取到高速缓冲当中
- * 如果已经在高速缓冲中，但是不是最新的，则依然会从设备中
- * 重新读取
  */
 struct buffer_head * bread(dev_t dev, int block, int size)
 {
@@ -620,10 +550,6 @@ struct buffer_head * bread(dev_t dev, int block, int size)
 	wait_on_buffer(bh);
 	if (bh->b_uptodate)
 		return bh;
-	/* getblk得到的缓冲块不符合要求，
-	 * 也即是数据不是最新的,然后释放缓冲块，
-	 * 并返回空表示从设备读取数据失败
-	 */
 	brelse(bh);
 	return NULL;
 }
@@ -671,9 +597,6 @@ struct buffer_head * breada(dev_t dev,int first, ...)
 /*
  * See fs/inode.c for the weird use of volatile..
  */
-
-/* 将该缓冲头的数据清空，并保留等待队列，将bh放在unused_list的链首
- */
 static void put_unused_buffer_head(struct buffer_head * bh)
 {
 	struct wait_queue * wait;
@@ -685,31 +608,23 @@ static void put_unused_buffer_head(struct buffer_head * bh)
 	unused_list = bh;
 }
 
-/* 创建更多的缓冲头，但是并没有指定缓冲头指向的数据b_data
- */
 static void get_more_buffer_heads(void)
 {
 	int i;
 	struct buffer_head * bh;
 
-	/*如果还有未使用的缓冲头则不做处理*/
 	if (unused_list)
 		return;
 
 	if(! (bh = (struct buffer_head*) get_free_page(GFP_BUFFER)))
 		return;
-	/* 将申请的一页物理内存，连接起来，注意是单向连接，
-	 * 并且将unused_list指向链首，同时增加缓冲头的数量
-	 */
+
 	for (nr_buffer_heads+=i=PAGE_SIZE/sizeof*bh ; i>0; i--) {
 		bh->b_next_free = unused_list;	/* only make link */
 		unused_list = bh++;
 	}
 }
 
-/* 从缓冲头unused_list链表的链首取出一个节点
- * 并初始化数据
- */
 static struct buffer_head * get_unused_buffer_head(void)
 {
 	struct buffer_head * bh;
@@ -732,11 +647,6 @@ static struct buffer_head * get_unused_buffer_head(void)
  * follow the buffers created.  Return NULL if unable to create more
  * buffers.
  */
-
-/* 将申请到的一页物理内存分成size大小的块，
- * 然后依次将这些块映射到相应的缓冲头，然后
- * 将数据指向该物理块的缓冲头用b_this_page链接起来
- */
 static struct buffer_head * create_buffers(unsigned long page, unsigned long size)
 {
 	struct buffer_head *bh, *head;
@@ -748,25 +658,16 @@ static struct buffer_head * create_buffers(unsigned long page, unsigned long siz
 		bh = get_unused_buffer_head();
 		if (!bh)
 			goto no_grow;
-		/* 为了防止在page块在映射到一般时，
-		 * 找不到空闲的缓冲头，然后直接跳转到no_grow
-		 * 解除之前的部分映射
-		 */
 		bh->b_this_page = head;
 		head = bh;
 		bh->b_data = (char *) (page+offset);
 		bh->b_size = size;
 	}
-	return head; /*将指向该物理块最后一块的缓冲头返回*/
+	return head;
 /*
  * In case anything failed, we just free everything we got.
  */
 no_grow:
-	/* head是上一个指向page这块物理块数据的缓冲头，
-	 * 然后将数据指向该物理块的所有缓冲头给释放，
-	 * 之前已经映射缓冲头和page对应的物理块的(上面的while循环)，
-	 * 将被解除映射
-	 */
 	bh = head;
 	while (bh) {
 		head = bh;
@@ -776,9 +677,6 @@ no_grow:
 	return NULL;
 }
 
-/* 将nrbuf块bh对应的设备读入到bh当中，
- * 注意此时bh中已经记录了读取设备的基本信息
- */
 static void read_buffers(struct buffer_head * bh[], int nrbuf)
 {
 	int i;
@@ -798,11 +696,6 @@ static void read_buffers(struct buffer_head * bh[], int nrbuf)
 	}
 }
 
-/* first是根据dev，block条件hash出来的第一个节点
- * 此函数是检测物理设备的多个逻辑块号对应的高速缓存数据b_data
- * 是否在同一个物理页中连续，并且第一个块对应的数据块物理地址
- * 是否和页对齐，如果是对齐的则将address对应的物理页给释放掉
- */
 static unsigned long check_aligned(struct buffer_head * first, unsigned long address,
 	dev_t dev, int *b, int size)
 {
@@ -812,9 +705,6 @@ static unsigned long check_aligned(struct buffer_head * first, unsigned long add
 	int block;
 	int nrbuf;
 
-	/* 获取高速缓存的数据块，
-	 * 如果没有和4KB对齐则不做处理
-	 */
 	page = (unsigned long) first->b_data;
 	if (page & ~PAGE_MASK) {
 		brelse(first);
@@ -823,19 +713,14 @@ static unsigned long check_aligned(struct buffer_head * first, unsigned long add
 	mem_map[MAP_NR(page)]++;
 	bh[0] = first;
 	nrbuf = 1;
-	/* 一页内存最多缓存块也就8块=4KB/412B
-	 */
 	for (offset = size ; offset < PAGE_SIZE ; offset += size) {
-		block = *++b;   /* 获取b中的逻辑块号 */
+		block = *++b;
 		if (!block)
 			goto no_go;
 		first = get_hash_table(dev, block, size);
 		if (!first)
 			goto no_go;
 		bh[nrbuf++] = first;
-		/* 保证多个逻辑块号对应的高速缓存数据在同一个页中连续存放
-		 * 其中第一个页的b_data在物理页的其实地址处
-		 */
 		if (page+offset != (unsigned long) first->b_data)
 			goto no_go;
 	}
@@ -852,8 +737,6 @@ no_go:
 	return 0;
 }
 
-/* 将b中逻辑块依次连续的读入到address对应的物理页中
- */
 static unsigned long try_to_load_aligned(unsigned long address,
 	dev_t dev, int b[], int size)
 {
@@ -862,9 +745,6 @@ static unsigned long try_to_load_aligned(unsigned long address,
 	int * p;
 	int block;
 
-	/* 将address对应的物理页分成size大小的高速缓存数据区
-	 * 然后将逻辑块号对应的设备数据依次连续读入到address所在的页
-	 */
 	bh = create_buffers(address, size);
 	if (!bh)
 		return 0;
@@ -872,10 +752,8 @@ static unsigned long try_to_load_aligned(unsigned long address,
 	p = b;
 	for (offset = 0 ; offset < PAGE_SIZE ; offset += size) {
 		block = *(p++);
-		/*逻辑块号不能为0*/
 		if (!block)
 			goto not_aligned;
-		/*如果对应的逻辑块已经加载到了高速缓存则出错*/
 		if (find_buffer(dev, block, size))
 			goto not_aligned;
 	}
@@ -892,7 +770,7 @@ static unsigned long try_to_load_aligned(unsigned long address,
 		nr_buffers++;
 		insert_into_queues(bh);
 		if (bh->b_this_page)
-			bh = bh->b_this_page; /*获取b_data相邻的下一个缓存节点*/
+			bh = bh->b_this_page;
 		else
 			break;
 	}
@@ -932,16 +810,12 @@ static inline unsigned long try_to_share_buffers(unsigned long address,
 	block = b[0];
 	if (!block)
 		return 0;
-	/*从对应的hash链表中找到第一个可用的高速缓存节点*/
 	bh = get_hash_table(dev, block, size);
 	if (bh)
 		return check_aligned(bh, address, dev, b, size);
 	return try_to_load_aligned(address, dev, b, size);
 }
 
-
-/* 从物理地址from处复制size大小到to物理地址处
- */
 #define COPYBLK(size,from,to) \
 __asm__ __volatile__("rep ; movsl": \
 	:"c" (((unsigned long) size) >> 2),"S" (from),"D" (to) \
@@ -953,12 +827,6 @@ __asm__ __volatile__("rep ; movsl": \
  * all at the same time, not waiting for one to be read, and then another
  * etc. This also allows us to optimize memory usage by sharing code pages
  * and filesystem buffers..
- */
-
-/* 注意此处的address是物理地址
- * size是物理设备中块的大小
- * 该函数作用是从dev设备中读取多少块(逻辑块号)的数据到
- * address开始的地址处
  */
 unsigned long bread_page(unsigned long address, dev_t dev, int b[], int size, int prot)
 {
@@ -972,15 +840,11 @@ unsigned long bread_page(unsigned long address, dev_t dev, int b[], int size, in
 			return where;
 	}
 	++current->maj_flt;
-	/*size大小不固定，所以需要读取的块数不一定就是8块
-	 *如果是512KB则是8块，如果是1024KB则是4块
-	 */
  	for (i=0, j=0; j<PAGE_SIZE ; i++, j+= size) {
 		bh[i] = NULL;
 		if (b[i])
 			bh[i] = getblk(dev, b[i], size);
 	}
-	/*将上面得到的多少块逻辑块读入到高速缓存*/
 	read_buffers(bh,i);
 	where = address;
  	for (i=0, j=0; j<PAGE_SIZE ; i++, j += size,address += size) {
@@ -997,19 +861,11 @@ unsigned long bread_page(unsigned long address, dev_t dev, int b[], int size, in
  * Try to increase the number of buffers available: the size argument
  * is used to determine what kind of buffers we want.
  */
- 
-/* 增长高速缓存，因为高速缓存的大小可以设置为512KB,1024KB等等
- * 该函数是用来增长一页(4KB)的高速缓存，该页被分成size大小的均等块
- * 高速缓存结构体不占用该块内存，空闲的换冲头结构体存放在以unused_list为首的
- * 链表当中
- */
 static int grow_buffers(int pri, int size)
 {
 	unsigned long page;
 	struct buffer_head *bh, *tmp;
 
-	/* 限制增长buffer块的大小，要么是512KB,要么是1024KB
-	 */
 	if ((size & 511) || (size > PAGE_SIZE)) {
 		printk("VFS: grow_buffers: size = %d\n",size);
 		return 0;
@@ -1022,8 +878,6 @@ static int grow_buffers(int pri, int size)
 		return 0;
 	}
 	tmp = bh;
-	/* 将刚才分配的一夜物理内存对应的缓冲头给添加到free_list双向链表当中
-	 */
 	while (1) {
 		if (free_list) {
 			tmp->b_next_free = free_list;
@@ -1035,14 +889,13 @@ static int grow_buffers(int pri, int size)
 			tmp->b_next_free = tmp;
 		}
 		free_list = tmp;
-		++nr_buffers; /*增加缓存数量*/
+		++nr_buffers;
 		if (tmp->b_this_page)
 			tmp = tmp->b_this_page;
 		else
 			break;
 	}
 	tmp->b_this_page = bh;
-	/*增加缓寸大小*/
 	buffermem += PAGE_SIZE;
 	return 1;
 }
@@ -1050,9 +903,6 @@ static int grow_buffers(int pri, int size)
 /*
  * try_to_free() checks if all the buffers on this particular page
  * are unused, and free's the page if so.
- */
-/* bhp获取bh指向的下一个空闲的缓冲头，如果下一个缓冲头需要被释放
- * 则bhp继续指向下一个的下一个
  */
 static int try_to_free(struct buffer_head * bh, struct buffer_head ** bhp)
 {
@@ -1063,8 +913,6 @@ static int try_to_free(struct buffer_head * bh, struct buffer_head ** bhp)
 	page = (unsigned long) bh->b_data;
 	page &= PAGE_MASK;
 	tmp = bh;
-	/* 扫描一圈判断缓冲头指向数据是否和bh->b_data在同一物理页
-	 */
 	do {
 		if (!tmp)
 			return 0;
@@ -1073,10 +921,6 @@ static int try_to_free(struct buffer_head * bh, struct buffer_head ** bhp)
 		tmp = tmp->b_this_page;
 	} while (tmp != bh);
 	tmp = bh;
-	/* 依次释放数据指向同一块内存的缓冲头，
-	 * 并将缓冲头添加到unused_list链表当中，
-	 * 同时减少nr_buffers和buffermem大小和释放缓冲头指向的数据块
-	 */
 	do {
 		p = tmp;
 		tmp = tmp->b_this_page;
@@ -1098,9 +942,6 @@ static int try_to_free(struct buffer_head * bh, struct buffer_head ** bhp)
  * buffers: 3 means "don't bother too much", while a value
  * of 0 means "we'd better get some free pages now".
  */
-
-/* 收缩缓存空间
-  */
 int shrink_buffers(unsigned int priority)
 {
 	struct buffer_head *bh;
@@ -1130,9 +971,6 @@ int shrink_buffers(unsigned int priority)
 			bh->b_count--;
 			continue;
 		}
-		/* 更改空闲链的结构，并记下下一个空闲节点，
-		 * 然后继续循环处理,返回1表示成功释放一页
-		 */
 		if (try_to_free(bh, &bh))
 			return 1;
 	}
@@ -1169,9 +1007,6 @@ void show_buffers(void)
  * but I'm not sure), and programs in the ps package expect it.
  * 					- TYT 8/30/92
  */
-
-/* 高速缓存初始化函数
-  */
 void buffer_init(void)
 {
 	int i;
@@ -1183,8 +1018,6 @@ void buffer_init(void)
 	for (i = 0 ; i < NR_HASH ; i++)
 		hash_table[i] = NULL;
 	free_list = 0;
-	/* 一开始就增长一页的高速缓存
-	 */
 	grow_buffers(GFP_KERNEL, BLOCK_SIZE);
 	if (!free_list)
 		panic("VFS: Unable to initialize buffer free list!");

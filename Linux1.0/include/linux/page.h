@@ -10,11 +10,11 @@
 			/* number of bits that fit into a memory pointer */
 #define BITS_PER_PTR			(8*sizeof(unsigned long))
 			/* to mask away the intra-page address bits */
-#define PAGE_MASK			(~(PAGE_SIZE-1))           /* ~是按位取反*/
+#define PAGE_MASK			(~(PAGE_SIZE-1))
 			/* to align the pointer to the (next) page boundary */
-#define PAGE_ALIGN(addr)		(((addr)+PAGE_SIZE-1)&PAGE_MASK)   //将地址用页对齐
+#define PAGE_ALIGN(addr)		(((addr)+PAGE_SIZE-1)&PAGE_MASK)
 			/* to align the pointer to a pointer address */
-#define PTR_MASK			(~(sizeof(void*)-1))        //将指针地址对齐，即地址最后两位为0
+#define PTR_MASK			(~(sizeof(void*)-1))
 
 					/* sizeof(void*)==1<<SIZEOF_PTR_LOG2 */
 					/* 64-bit machines, beware!  SRB. */

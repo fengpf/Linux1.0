@@ -393,7 +393,6 @@ static struct file_operations memory_fops = {
 char* ftape_big_buffer;
 #endif
 
-/* 字符设备初始化 */
 long chr_dev_init(long mem_start, long mem_end)
 {
 	if (register_chrdev(MEM_MAJOR,"mem",&memory_fops))

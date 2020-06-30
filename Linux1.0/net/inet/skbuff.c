@@ -44,12 +44,8 @@
 /*
  *	Resource tracking variables
  */
- 
-/* 系统中sk_buff占用的内存大大小
- */
+
 volatile unsigned long net_memory=0;
-/* 系统中sk_buff的数量
- */
 volatile unsigned long net_skbcount=0;
 
 /*
@@ -57,9 +53,7 @@ volatile unsigned long net_skbcount=0;
  */
 
 
-/* 对struct sk_buff进行检查的一个函数，其中的line代表文件中的行，
- * file代表文件名称 
- */
+
 void skb_check(struct sk_buff *skb, int line, char *file)
 {
 	if(skb->magic_debug_cookie==SK_FREED_SKB)
@@ -88,7 +82,6 @@ void skb_check(struct sk_buff *skb, int line, char *file)
  *	Insert an sk_buff at the start of a list.
  */
 
-/* 将newsk添加到list首部当中，并且让newsk作为链表首部 */
 void skb_queue_head(struct sk_buff *volatile* list,struct sk_buff *newsk)
 {
 	unsigned long flags;
@@ -98,7 +91,6 @@ void skb_queue_head(struct sk_buff *volatile* list,struct sk_buff *newsk)
 		printk("Suspicious queue head: sk_buff on list!\n");
 	save_flags(flags);
 	cli();
-	/* 设置新sk_buff的头部，所有的sk_buff中的list都指向同一个头部 */
 	newsk->list=list;
 
 	newsk->next=*list;
@@ -118,7 +110,7 @@ void skb_queue_head(struct sk_buff *volatile* list,struct sk_buff *newsk)
 /*
  *	Insert an sk_buff at the end of a list.
  */
-/* 添加到list的尾部 */
+
 void skb_queue_tail(struct sk_buff *volatile* list, struct sk_buff *newsk)
 {
 	unsigned long flags;
@@ -130,7 +122,6 @@ void skb_queue_tail(struct sk_buff *volatile* list, struct sk_buff *newsk)
 	save_flags(flags);
 	cli();
 
-	/*设置newsk首部 */
 	newsk->list=list;
 	if(*list)
 	{
@@ -156,8 +147,6 @@ void skb_queue_tail(struct sk_buff *volatile* list, struct sk_buff *newsk)
  *	so you can grab read and free buffers as another process adds them.
  */
 
-/* 将list为队首的双向队列中的第一个给取出
- */
 struct sk_buff *skb_dequeue(struct sk_buff *volatile* list)
 {
 	long flags;
@@ -173,7 +162,6 @@ struct sk_buff *skb_dequeue(struct sk_buff *volatile* list)
 	}
 
 	result=*list;
-	/* 如果只有一个节点 */
 	if(result->next==result)
 		*list=NULL;
 	else
@@ -190,7 +178,6 @@ struct sk_buff *skb_dequeue(struct sk_buff *volatile* list)
 		printk("Dequeued packet has invalid list pointer\n");
 
 	result->list=0;
-	/* 断开双向连接 */
 	result->next=0;
 	result->prev=0;
 	return(result);
@@ -200,7 +187,6 @@ struct sk_buff *skb_dequeue(struct sk_buff *volatile* list)
  *	Insert a packet before another one in a list.
  */
 
-/* 将newsk插入到old的前面 */
 void skb_insert(struct sk_buff *old, struct sk_buff *newsk)
 {
 	unsigned long flags;
@@ -228,7 +214,6 @@ void skb_insert(struct sk_buff *old, struct sk_buff *newsk)
  *	Place a packet after a given packet in a list.
  */
 
-/* 将newsk添加到old的后面 */
 void skb_append(struct sk_buff *old, struct sk_buff *newsk)
 {
 	unsigned long flags;
@@ -259,7 +244,6 @@ void skb_append(struct sk_buff *old, struct sk_buff *newsk)
  *	_FIRST_.
  */
 
-/* 将skb从skb链表中删除 */
 void skb_unlink(struct sk_buff *skb)
 {
 	unsigned long flags;
@@ -268,17 +252,12 @@ void skb_unlink(struct sk_buff *skb)
 
 	IS_SKB(skb);
 
-	/* 判断队列的首部是否为NULL */
 	if(skb->list)
 	{
 		skb->next->prev=skb->prev;
 		skb->prev->next=skb->next;
-		/* 如果自己是首部 */
 		if(*skb->list==skb)
 		{
-			/* 如果队列中只有skb一个，则skb的list要设置为NULL,
-			 * 否则就将skb的下一个作为队首 
-			 */
 			if(skb->next==skb)
 				*skb->list=NULL;
 			else
@@ -300,10 +279,8 @@ void skb_unlink(struct sk_buff *skb)
 void skb_new_list_head(struct sk_buff *volatile* list)
 {
 	struct sk_buff *skb=skb_peek(list);
-	/* 如果队首为空，则不做任何处理 */
 	if(skb!=NULL)
 	{
-	    /* 将队中所有节点给检查一遍，并设置队首为list */
 		do
 		{
 			IS_SKB(skb);
@@ -321,7 +298,6 @@ void skb_new_list_head(struct sk_buff *volatile* list)
  *	type system cli() peek the buffer copy the data and sti();
  */
 
-/* 函数作用很简单，就是取出一个指向sk_buff的指针 */
 struct sk_buff *skb_peek(struct sk_buff *volatile* list)
 {
 	return *list;
@@ -398,9 +374,6 @@ struct sk_buff *skb_peek_copy(struct sk_buff *volatile* list)
  *	not need to like protocols and sockets.
  */
 
-/* 将skb释放，通过skb中sk来进行，
- * rw表示该释放的skb是读还是写的缓冲空间，对应的更改缓存空间的大小 
- */
 void kfree_skb(struct sk_buff *skb, int rw)
 {
 	if (skb == NULL) {
@@ -450,7 +423,6 @@ void kfree_skb(struct sk_buff *skb, int rw)
  *	fields and also do memory statistics to find all the [BEEP] leaks.
  */
 
-/* kmalloc一个sk_buf，并初始化sk_buf数据 */
 struct sk_buff *alloc_skb(unsigned int size,int priority)
 {
 	struct sk_buff *skb;
@@ -474,8 +446,7 @@ struct sk_buff *alloc_skb(unsigned int size,int priority)
 	net_memory+=size;
 	net_skbcount++;
 	skb->magic_debug_cookie=SK_GOOD_SKB;
-       /* 初始化使用skb的进程数为0 */
-	skb->users=0;   
+	skb->users=0;
 	return skb;
 }
 
@@ -483,8 +454,6 @@ struct sk_buff *alloc_skb(unsigned int size,int priority)
  *	Free an skbuff by memory
  */
 
-/* 释放kmalloc申请的内存
- */
 void kfree_skbmem(void *mem,unsigned size)
 {
 	struct sk_buff *x=mem;

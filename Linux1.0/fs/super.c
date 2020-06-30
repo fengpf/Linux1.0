@@ -34,8 +34,6 @@ extern void fcntl_init_locks(void);
 
 extern int root_mountflags;
 
-/* 支持超级快的数量
- */ 
 struct super_block super_blocks[NR_SUPER];
 
 static int do_remount_sb(struct super_block *sb, int flags, char * data);
@@ -43,7 +41,6 @@ static int do_remount_sb(struct super_block *sb, int flags, char * data);
 /* this is initialized in init/main.c */
 dev_t ROOT_DEV = 0;
 
-/* 根据文件系统名称来获取文件系统的超级块读取函数 */
 struct file_system_type *get_fs_type(char *name)
 {
 	int a;
@@ -90,8 +87,6 @@ void sync_supers(dev_t dev)
 	}
 }
 
-/* 获取相应设备的超级块号
- */
 static struct super_block * get_super(dev_t dev)
 {
 	struct super_block * s;
@@ -104,14 +99,12 @@ static struct super_block * get_super(dev_t dev)
 			wait_on_super(s);
 			if (s->s_dev == dev)
 				return s;
-			/* 然后再重头开始找 */
 			s = 0+super_blocks;
 		} else
 			s++;
 	return NULL;
 }
 
-/* 释放相应设备的超级块 */
 void put_super(dev_t dev)
 {
 	struct super_block * sb;
@@ -132,10 +125,6 @@ void put_super(dev_t dev)
 		sb->s_op->put_super(sb);
 }
 
-/* 依次 循环处理文件系统类型，将读取到的文件系统超级块添加到数组super_blocks当中
-  * name表示文件系统的名称 
-  * 返回读取到的文件系统超级块  
-  */
 static struct super_block * read_super(dev_t dev,char *name,int flags,
 				       void *data, int silent)
 {
@@ -146,17 +135,13 @@ static struct super_block * read_super(dev_t dev,char *name,int flags,
 		return NULL;
 	check_disk_change(dev);
 	s = get_super(dev);
-	/* 如果找到了就直接返回 */
 	if (s)
 		return s;
-	/* 获取文件系统类型结构
-	 */
 	if (!(type = get_fs_type(name))) {
 		printk("VFS: on device %d/%d: get_fs_type(%s) failed\n",
 						MAJOR(dev), MINOR(dev), name);
 		return NULL;
 	}
-	/* 找到一个可用的超级块 */
 	for (s = 0+super_blocks ;; s++) {
 		if (s >= NR_SUPER+super_blocks)
 			return NULL;
@@ -165,14 +150,10 @@ static struct super_block * read_super(dev_t dev,char *name,int flags,
 	}
 	s->s_dev = dev;
 	s->s_flags = flags;
-	/* 然后通过对应文件系统类型的超级块读取函数来读取超级块
-	 */
 	if (!type->read_super(s,data, silent)) {
 		s->s_dev = 0;
 		return NULL;
 	}
-	/* 读取成功之后设置超级块的设备号
-	 */
 	s->s_dev = dev;
 	s->s_covered = NULL;
 	s->s_rd_only = 0;
@@ -218,19 +199,16 @@ static void put_unnamed_dev(dev_t dev)
 	unnamed_dev_in_use[dev] = 0;
 }
 
-/* 执行正在的挂载 */
 static int do_umount(dev_t dev)
 {
 	struct super_block * sb;
 	int retval;
 	
-        /* 如果是根设备，则进行的是从新挂载  */
 	if (dev==ROOT_DEV) {
 		/* Special case for "unmounting" root.  We just try to remount
 		   it readonly, and sync() the device. */
 		if (!(sb=get_super(dev)))
 			return -ENOENT;
-                /* 如果根设备不是只读的 */
 		if (!(sb->s_flags & MS_RDONLY)) {
 			fsync_dev(dev);
 			retval = do_remount_sb(sb, MS_RDONLY, 0);
@@ -268,7 +246,6 @@ static int do_umount(dev_t dev)
  * functions, they should be faked here.  -- jrs
  */
 
-/* 卸载文件系统 */
 asmlinkage int sys_umount(char * name)
 {
 	struct inode * inode;
@@ -302,7 +279,6 @@ asmlinkage int sys_umount(char * name)
 		dummy_inode.i_rdev = dev;
 		inode = &dummy_inode;
 	}
-        /* 设备的主设备号不能超过支持的最大主设备号 */
 	if (MAJOR(dev) >= MAX_BLKDEV) {
 		iput(inode);
 		return -ENXIO;
@@ -331,31 +307,19 @@ asmlinkage int sys_umount(char * name)
  * We also have to flush all inode-data for this device, as the new mount
  * might need new info.
  */
-/* 挂载文件系统
-  * dev表示需要挂载的文件系统的设备号
-  * dir表示需要挂载的目录
-  * type表示挂载类型，如nfs，proc，ext2
-  */
 static int do_mount(dev_t dev, const char * dir, char * type, int flags, void * data)
 {
 	struct inode * dir_i;
 	struct super_block * sb;
 	int error;
 
-	/* 得到对应路径的inode */
 	error = namei(dir,&dir_i);
 	if (error)
 		return error;
-
-	/* 正常情况下，没有其他进程或之前打开该inode的文件没有关闭，则不能挂载
-	  * 也就是不能因为挂载，强行终止其他操作，或者是一个已经挂载的文件系统 
-	  * 不能再让其他的文件系统挂载在它的上面，或者是循环挂载
-	  */
 	if (dir_i->i_count != 1 || dir_i->i_mount) {
 		iput(dir_i);
 		return -EBUSY;
 	}
-	/* 挂载必须要是一个目录，当然不能挂载到一个普通文件上 */
 	if (!S_ISDIR(dir_i->i_mode)) {
 		iput(dir_i);
 		return -EPERM;
@@ -364,16 +328,11 @@ static int do_mount(dev_t dev, const char * dir, char * type, int flags, void * 
 		iput(dir_i);
 		return -EBUSY;
 	}
-	/* 读取挂载文件系统的超级块，
-	  * type表示挂载的文件系统的名称，如nfs，proc，ext2等等
-	  */
 	sb = read_super(dev,type,flags,data,0);
-	/* s_covered不为空表示已经有一个文件系统挂载在该目录，所以不能再次挂载 */
 	if (!sb || sb->s_covered) {
 		iput(dir_i);
 		return -EBUSY;
 	}
-	/* 设置被覆盖的挂载点 */
 	sb->s_covered = dir_i;
 	dir_i->i_mount = sb->s_mounted;
 	return 0;		/* we don't iput(dir_i) - see umount */
@@ -386,7 +345,6 @@ static int do_mount(dev_t dev, const char * dir, char * type, int flags, void * 
  * FS-specific mount options can't be altered by remounting.
  */
 
-/* 重新挂载超级块 */
 static int do_remount_sb(struct super_block *sb, int flags, char *data)
 {
 	int retval;
@@ -546,35 +504,27 @@ asmlinkage int sys_mount(char * dev_name, char * dir_name, char * type,
 	return retval;
 }
 
-/* 挂载根文件系统
- */
 void mount_root(void)
 {
 	struct file_system_type * fs_type;
 	struct super_block * sb;
 	struct inode * inode;
 
-	/* 将super_blocks全部数据清0 */
 	memset(super_blocks, 0, sizeof(super_blocks));
 	fcntl_init_locks();
 	if (MAJOR(ROOT_DEV) == FLOPPY_MAJOR) {
 		printk(KERN_NOTICE "VFS: Insert root floppy and press ENTER\n");
 		wait_for_keypress();
 	}
-	/*循环处理文件系统类型*/
 	for (fs_type = file_systems; fs_type->read_super; fs_type++) {
-		/* 表示是否需要设备，如果我ext2就是1，proc就是0 */
 		if (!fs_type->requires_dev)
 			continue;
-		/* 读取每个文件系统的超级块 */
 		sb = read_super(ROOT_DEV,fs_type->name,root_mountflags,NULL,1);
 		if (sb) {
-			/* 注意s_mounted是文件系统的根节点 */
 			inode = sb->s_mounted;
 			inode->i_count += 3 ;	/* NOTE! it is logically used 4 times, not 1 */
 			sb->s_covered = inode;
 			sb->s_flags = root_mountflags;
-                        /* 设置进程的工作目录的根目录 */
 			current->pwd = inode;
 			current->root = inode;
 			printk ("VFS: Mounted root (%s filesystem)%s.\n",

@@ -20,7 +20,6 @@
 
 #include <linux/tcp.h>
 
-/* 特殊的包里面都包含了tcp和ip的头部长度 */
 #define MAX_SYN_SIZE	44 + sizeof (struct sk_buff) + MAX_HEADER
 #define MAX_FIN_SIZE	40 + sizeof (struct sk_buff) + MAX_HEADER
 #define MAX_ACK_SIZE	40 + sizeof (struct sk_buff) + MAX_HEADER
@@ -73,21 +72,17 @@
  
 #define TCPOPT_NOP		1
 #define TCPOPT_EOL		0
-#define TCPOPT_MSS		2           /* 设置tcp报文最大长度 */
+#define TCPOPT_MSS		2
 
 /*
  * The next routines deal with comparing 32 bit unsigned ints
  * and worry about wraparound (automatic with unsigned arithmetic).
  */
-
-/* seq1是否在seq2前面，在tcp当中数据是有序号的 */
 static inline int before(unsigned long seq1, unsigned long seq2)
 {
         return (long)(seq1-seq2) < 0;
 }
 
-/* 表示seq2是否在seq1后面，大于0表示在后面，小于0则不是
- */
 static inline int after(unsigned long seq1, unsigned long seq2)
 {
 	return (long)(seq1-seq2) > 0;
@@ -107,8 +102,6 @@ static inline int between(unsigned long seq1, unsigned long seq2, unsigned long 
  * convinced that this is the solution for the 'getpeername(2)'
  * problem. Thanks to Stephen A. Wood <saw@cebaf.gov>  -FvK
  */
-
-/* 判断tcp的状态是否可以关闭 */
 static inline const int
 tcp_connected(const int state)
 {

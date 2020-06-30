@@ -7,7 +7,6 @@
 
 /* limits */
 
-/*块设备，字符设备的最大支持数量为32个*/
 #define MAX_CHRDEV 32
 #define MAX_BLKDEV 32
 
@@ -48,8 +47,6 @@
  * 27 - qic117 tape
  */
 
-/* 不同类型的主设备号
- */
 #define UNNAMED_MAJOR	0
 #define MEM_MAJOR	1
 #define FLOPPY_MAJOR	2

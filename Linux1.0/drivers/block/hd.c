@@ -50,7 +50,7 @@ static inline unsigned char CMOS_READ(unsigned char addr)
 #define MAX_ERRORS     16	/* Max read/write errors/sector */
 #define RESET_FREQ      8	/* Reset controller every 8th retry */
 #define RECAL_FREQ      4	/* Recalibrate every 4th retry */
-#define MAX_HD		2       /* 支持hd的最大数量 */
+#define MAX_HD		2
 
 static void recal_intr(void);
 static void bad_rw_intr(void);
@@ -634,7 +634,6 @@ static struct sigaction hd_sigaction = {
 	NULL
 };
 
-/* 硬盘初始化 */
 static void hd_geninit(void)
 {
 	int drive, i;
@@ -699,7 +698,6 @@ static void hd_geninit(void)
 				hd_info[i].sect*hd_info[i].cyl;
 	}
 	if (NR_HD) {
-		/* 注册hd的中断处理*/
 		if (irqaction(HD_IRQ,&hd_sigaction)) {
 			printk("hd.c: unable to get IRQ%d for the harddisk driver\n",HD_IRQ);
 			NR_HD = 0;
@@ -707,7 +705,6 @@ static void hd_geninit(void)
 	}
 	hd_gendisk.nr_real = NR_HD;
 
-	/* 设置硬盘设备的数据块的块大小 */
 	for(i=0;i<(MAX_HD << 6);i++) hd_blocksizes[i] = 1024;
 	blksize_size[MAJOR_NR] = hd_blocksizes;
 }
@@ -725,7 +722,6 @@ static struct file_operations hd_fops = {
 	block_fsync		/* fsync */
 };
 
-/* 硬盘设备初始化 ，将hd_gendisk节点添加到gendisk_head链表中*/
 unsigned long hd_init(unsigned long mem_start, unsigned long mem_end)
 {
 	if (register_blkdev(MAJOR_NR,"hd",&hd_fops)) {

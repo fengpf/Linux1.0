@@ -16,8 +16,6 @@
  * Count is not yet used: but we'll probably support reading several entries
  * at once in the future. Use count=1 in the library for future expansions.
  */
-/* 读取目录文件的一个目录 
- */
 asmlinkage int sys_readdir(unsigned int fd, struct dirent * dirent, unsigned int count)
 {
 	int error;
@@ -69,11 +67,6 @@ asmlinkage int sys_lseek(unsigned int fd, off_t offset, unsigned int origin)
 	return file->f_pos;
 }
 
-/* 系统读函数 
- * fd是文件描述符
- * buf是存放读取数据的内存地址
- * count是读取数量
- */
 asmlinkage int sys_read(unsigned int fd,char * buf,unsigned int count)
 {
 	int error;
@@ -94,7 +87,6 @@ asmlinkage int sys_read(unsigned int fd,char * buf,unsigned int count)
 	return file->f_op->read(inode,file,buf,count);
 }
 
-/* 系统写函数 */
 asmlinkage int sys_write(unsigned int fd,char * buf,unsigned int count)
 {
 	int error;

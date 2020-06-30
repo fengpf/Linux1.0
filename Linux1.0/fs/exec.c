@@ -53,9 +53,6 @@ asmlinkage int sys_brk(unsigned long);
 
 extern void shm_exit (void);
 
-/* 打开inode，同时给增加一个file指针和一个文件描述符
-  * 相当于dup函数功能吧 
-  */
 int open_inode(struct inode * inode, int mode)
 {
 	int error, fd;
@@ -316,8 +313,6 @@ unsigned long * create_tables(char * p,int argc,int envc,int ibcs)
 /*
  * count() counts the number of arguments/envelopes
  */
-/* 获取参数或环境变量的个数
- */
 static int count(char ** argv)
 {
 	int i=0;
@@ -410,9 +405,7 @@ unsigned long change_ldt(unsigned long text_size,unsigned long * page)
 	for (i=MAX_ARG_PAGES-1 ; i>=0 ; i--) {
 		data_base -= PAGE_SIZE;
 		if (page[i]) {
-                        /* 增加进程驻留在内存中的物理页数量 */
 			current->rss++;
-                        /* 此处说明，在栈开始前还有一小段和进程相关的数据 */
 			put_dirty_page(current,page[i],data_base);
 		}
 	}
@@ -423,9 +416,6 @@ unsigned long change_ldt(unsigned long text_size,unsigned long * page)
  * Read in the complete executable. This is used for "-N" files
  * that aren't on a block boundary, and for files on filesystems
  * without bmap support.
- */
-
-/* 从可执行文件的offset处开始读取count个字节到地址addr处
  */
 int read_exec(struct inode *inode, unsigned long offset,
 	char * addr, unsigned long count)
@@ -471,7 +461,6 @@ end_readexec:
  * that a new one can be started
  */
 
-/* 清理旧进程的资源 */
 void flush_old_exec(struct linux_binprm * bprm)
 {
 	int i;
@@ -489,10 +478,8 @@ void flush_old_exec(struct linux_binprm * bprm)
 				current->comm[i++] = ch;
 	}
 	current->comm[i] = '\0';
-        /* 清理共享内存 */
 	if (current->shm)
 		shm_exit();
-        /* 释放就进程可执行文件的inode */
 	if (current->executable) {
 		iput(current->executable);
 		current->executable = NULL;
@@ -502,7 +489,6 @@ void flush_old_exec(struct linux_binprm * bprm)
 	mpnt = current->mmap;
 	current->mmap = NULL;
 	current->stk_vma = NULL;
-        /* 清理通过mmap函数得到的虚拟地址空间 */
 	while (mpnt) {
 		mpnt1 = mpnt->vm_next;
 		if (mpnt->vm_ops && mpnt->vm_ops->close)
@@ -529,7 +515,6 @@ void flush_old_exec(struct linux_binprm * bprm)
 	if (bprm->e_uid != current->euid || bprm->e_gid != current->egid || 
 	    !permission(bprm->inode,MAY_READ))
 		current->dumpable = 0;
-        /* 清理进程的信号 */
 	current->signal = 0;
 	for (i=0 ; i<32 ; i++) {
 		current->sigaction[i].sa_mask = 0;
@@ -537,12 +522,10 @@ void flush_old_exec(struct linux_binprm * bprm)
 		if (current->sigaction[i].sa_handler != SIG_IGN)
 			current->sigaction[i].sa_handler = NULL;
 	}
-        /* 关闭close_on_exec集合中的文件 */
 	for (i=0 ; i<NR_OPEN ; i++)
 		if (FD_ISSET(i,&current->close_on_exec))
 			sys_close(i);
 	FD_ZERO(&current->close_on_exec);
-        /* 清理用户态进程页表 */
 	clear_page_tables(current);
 	if (last_task_used_math == current)
 		last_task_used_math = NULL;
@@ -553,8 +536,6 @@ void flush_old_exec(struct linux_binprm * bprm)
 /*
  * sys_execve() executes a new program.
  */
-/* execve函数的实际执行函数
- */
 static int do_execve(char * filename, char ** argv, char ** envp, struct pt_regs * regs)
 {
 	struct linux_binprm bprm;
@@ -564,13 +545,11 @@ static int do_execve(char * filename, char ** argv, char ** envp, struct pt_regs
 	int retval;
 	int sh_bang = 0;
 
-        /* 如果代码段不正确，则返回 */
 	if (regs->cs != USER_CS)
 		return -EINVAL;
 	bprm.p = PAGE_SIZE*MAX_ARG_PAGES-4;
 	for (i=0 ; i<MAX_ARG_PAGES ; i++)	/* clear page-table */
 		bprm.page[i] = 0;
-	/*　获取路径对应的文件的ｉｎｏｄｅ　*/
 	retval = open_namei(filename, 0, 0, &bprm.inode, NULL);
 	if (retval)
 		return retval;
@@ -592,7 +571,6 @@ restart_interp:
 		goto exec_error2;
 	}
 	i = bprm.inode->i_mode;
-    /* 如果可执行文件设置了S_ISUID，则进程的euid必须是可执行文件的属主 */
 	if (IS_NOSUID(bprm.inode) && (((i & S_ISUID) && bprm.inode->i_uid != current->
 	    euid) || ((i & S_ISGID) && !in_group_p(bprm.inode->i_gid))) &&
 	    !suser()) {
@@ -619,7 +597,6 @@ restart_interp:
 	memset(bprm.buf,0,sizeof(bprm.buf));
 	old_fs = get_fs();
 	set_fs(get_ds());
-        /* 此处是读取可执行文件的格式 */
 	retval = read_exec(bprm.inode,0,bprm.buf,128);
 	set_fs(old_fs);
 	if (retval < 0)
@@ -713,10 +690,9 @@ restart_interp:
 		if (!fn)
 			break;
 		retval = fn(&bprm, regs);
-		/* 如果加载失败则继续使用其他的加载方式 */
 		if (retval == 0) {
 			iput(bprm.inode);
-			current->did_exec = 1; /* 当前进程执行过execve函数 */
+			current->did_exec = 1;
 			return 0;
 		}
 		fmt++;
@@ -731,8 +707,6 @@ exec_error1:
 
 /*
  * sys_execve() executes a new program.
- */
-/* execve函数族系统调用
  */
 asmlinkage int sys_execve(struct pt_regs regs)
 {
@@ -769,7 +743,6 @@ extern int load_coff_library(int fd);
 #endif
 
 /* Here are the actual binaries that will be accepted  */
-/* linux中不同可执行文件格式的加载函数 */
 struct linux_binfmt formats[] = {
 	{load_aout_binary, load_aout_library},
 #ifdef CONFIG_BINFMT_ELF
@@ -785,7 +758,7 @@ struct linux_binfmt formats[] = {
  * These are the functions used to load a.out style executables and shared
  * libraries.  There is no binary dependent code anywhere else.
  */
-/* 加载a.out格式的二进制文件 */
+
 int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 {
 	struct exec ex;
@@ -815,10 +788,8 @@ int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	/* OK, This is the point of no return */
 	flush_old_exec(bprm);
 
-	/* 先是代码段+数据段+堆 */
 	current->end_code = N_TXTADDR(ex) + ex.a_text;
 	current->end_data = ex.a_data + current->end_code;
-        /* 设置当前堆起始地址和当前的head指针为数据段的结束位置 */
 	current->start_brk = current->brk = current->end_data;
 	current->start_code += N_TXTADDR(ex);
 	current->rss = 0;
@@ -827,7 +798,6 @@ int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	current->executable = NULL;  /* for OMAGIC files */
 	current->sgid = current->egid = bprm->e_gid;
 	if (N_MAGIC(ex) == OMAGIC) {
-                /* 将代码段和数据段映射到进程的虚拟地址空间 */
 		do_mmap(NULL, 0, ex.a_text+ex.a_data,
 			PROT_READ|PROT_WRITE|PROT_EXEC,
 			MAP_FIXED|MAP_PRIVATE, 0);
@@ -872,17 +842,12 @@ int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 		bprm->inode->i_count++;
 	}
 beyond_if:
-        /* 从这个地方就可以看出来，进程的bss段其实是在堆当中，
-          * 并且在堆得起始位置处 
-          */
 	sys_brk(current->brk+ex.a_bss);
 	
 	p += change_ldt(ex.a_text,bprm->page);
 	p -= MAX_ARG_PAGES*PAGE_SIZE;
 	p = (unsigned long) create_tables((char *)p,bprm->argc,bprm->envc,0);
-        /* 设置栈的起始位置，并不是从TASK_SIZE开始的 */
 	current->start_stack = p;
-        /* 更改进程的下一条指令指向a.out的入口地址处 */
 	regs->eip = ex.a_entry;		/* eip, magic happens :-) */
 	regs->esp = p;			/* stack pointer */
 	if (current->flags & PF_PTRACED)

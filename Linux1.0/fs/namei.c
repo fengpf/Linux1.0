@@ -26,16 +26,12 @@
  *
  * POSIX.1 2.4: an empty pathname is invalid (ENOENT).
  */
-
-/* 从内核中申请一页的内存用来存放filename中的数据
- */
 int getname(const char * filename, char **result)
 {
 	int error;
 	unsigned long i, page;
 	char * tmp, c;
 
-	/* 将用户空间映射到内核空间*/
 	i = (unsigned long) filename;
 	if (!i || i >= TASK_SIZE)
 		return -EFAULT;
@@ -63,8 +59,6 @@ int getname(const char * filename, char **result)
 	return error;
 }
 
-/* 将name地址所在的一页内存给释放掉
- */
 void putname(char * name)
 {
 	free_page((unsigned long) name);
@@ -97,10 +91,6 @@ int permission(struct inode * inode,int mask)
  * routines (currently minix_lookup) for it. It also checks for
  * fathers (pseudo-roots, mount-points)
  */
-
-
-/* 在dir对应的目录当中查找文件名为name,且长度为len的文件或目录的inode
- */
 int lookup(struct inode * dir,const char * name, int len,
 	struct inode ** result)
 {
@@ -125,8 +115,6 @@ int lookup(struct inode * dir,const char * name, int len,
 			dir->i_count++;
 		}
 	}
-	/* 判断不是一个目录，目录也是一种特殊的文件
-	 */
 	if (!dir->i_op || !dir->i_op->lookup) {
 		iput(dir);
 		return -ENOTDIR;
@@ -151,10 +139,6 @@ int follow_link(struct inode * dir, struct inode * inode,
 		*res_inode = NULL;
 		return -ENOENT;
 	}
-	/* 如果follow_link为空，则释放dir，
-	 * 同时将res_inode指向inode,有一种情况可能就是目录的符号连接
-	 * 当读取到目录符号连接时，则回继续转到真正的目录下面
-	 */
 	if (!inode->i_op || !inode->i_op->follow_link) {
 		iput(dir);
 		*res_inode = inode;
@@ -168,13 +152,6 @@ int follow_link(struct inode * dir, struct inode * inode,
  *
  * dir_namei() returns the inode of the directory of the
  * specified name, and the name within that directory.
- */
-
-/* pathname路径       /usr/local/test.txt
- * namelen文件名长度  strlen("test.txt")
- * name      test.txt
- * base      文件系统的根目录，或当前进程的启动目录的i节点
- * res_inode 找到的目录文件的inode，注意这里是目录文件的inode
  */
 static int dir_namei(const char * pathname, int * namelen, const char ** name,
 	struct inode * base, struct inode ** res_inode)
@@ -197,27 +174,16 @@ static int dir_namei(const char * pathname, int * namelen, const char ** name,
 	}
 	while (1) {
 		thisname = pathname;
-		/* 以'/'为分割字符，分割路径
-		 * 在这里只会处理目录，如给出以下路径/usr/local/test,
-		 * 以‘/’为根目录寻找下一个目录usr,在以usr为父目录寻找到
-		 * local子目录，再当以local为父目录查找时，此时的c等于0，
-		 * 并不会继续查找下去，此时就会返回local目录的inode
-		 */
 		for(len=0;(c = *(pathname++))&&(c != '/');len++)
 			/* nothing */ ;
 		if (!c)
 			break;
-		/*增加引用计数，如果不增加，则可能在当前进程被切换出去之后，把该inode给释放掉了*/
 		base->i_count++;
 		error = lookup(base,thisname,len,&inode);
 		if (error) {
 			iput(base);
 			return error;
 		}
-		/* 注意这句非常重要，更改base和inode之间的关键
-		 * 将找到的inode设置为base，然后下一轮循环继续
-		 * 在base的目录下面寻找
-		 */
 		error = follow_link(base,inode,0,0,&base);
 		if (error)
 			return error;
@@ -226,19 +192,12 @@ static int dir_namei(const char * pathname, int * namelen, const char ** name,
 		iput(base);
 		return -ENOTDIR;
 	}
-	/*记录最后的文件名称、长度和文件所在的目录的inode*/
 	*name = thisname;
 	*namelen = len;
 	*res_inode = base;
 	return 0;
 }
 
-
-/* pathname代表文件路径
- * base代表是从哪个inode下面开始检查路径
- * follow_links代表如果是链接，是否继续读取链接真正指向的文件
- * res_inode表示最终路径查找成功后的inode
- */
 static int _namei(const char * pathname, struct inode * base,
 	int follow_links, struct inode ** res_inode)
 {
@@ -256,7 +215,6 @@ static int _namei(const char * pathname, struct inode * base,
 		iput(base);
 		return error;
 	}
-        /* 如果跟踪连接 */
 	if (follow_links) {
 		error = follow_link(base,inode,0,0,&inode);
 		if (error)
@@ -267,7 +225,6 @@ static int _namei(const char * pathname, struct inode * base,
 	return 0;
 }
 
-/* 不跟踪连接 */
 int lnamei(const char * pathname, struct inode ** res_inode)
 {
 	int error;
@@ -288,9 +245,6 @@ int lnamei(const char * pathname, struct inode ** res_inode)
  * Open, link etc use their own routines, but this is enough for things
  * like 'chmod' etc.
  */
-/* 打开一个路径对应的inode，如果该路径中存在软连接，
-  * 则继续下去，可以和上面函数对比 
-  */
 int namei(const char * pathname, struct inode ** res_inode)
 {
 	int error;
@@ -317,11 +271,6 @@ int namei(const char * pathname, struct inode ** res_inode)
  * which is a lot more logical, and also allows the "no perm" needed
  * for symlinks (where the permissions are checked later).
  */
-
-/* 获取路径所对应文件的inode，将查找到的结果inode存放在res_inode当中，
- * base表示从哪个目录下面查找，一般会设置为NULL,具体从哪个目录下面查找会
- * 根据pathname来决定
- */
 int open_namei(const char * pathname, int flag, int mode,
 	struct inode ** res_inode, struct inode * base)
 {
@@ -332,7 +281,6 @@ int open_namei(const char * pathname, int flag, int mode,
 
 	mode &= S_IALLUGO & ~current->umask;
 	mode |= S_IFREG;
-	/* 获取文件所在的目录的inode和文件名称、长度 */
 	error = dir_namei(pathname,&namelen,&basename,base,&dir);
 	if (error)
 		return error;
@@ -440,7 +388,6 @@ int do_mknod(const char * filename, int mode, dev_t dev)
 	struct inode * dir;
 
 	mode &= ~current->umask;
-	/* 获取filename路径中目录的inode */
 	error = dir_namei(filename,&namelen,&basename, NULL, &dir);
 	if (error)
 		return error;
@@ -460,10 +407,8 @@ int do_mknod(const char * filename, int mode, dev_t dev)
 		iput(dir);
 		return -EPERM;
 	}
-	/* 先占用该目录 */
 	down(&dir->i_sem);
 	error = dir->i_op->mknod(dir,basename,namelen,mode,dev);
-	/* 用完之后就释放该目录 */
 	up(&dir->i_sem);
 	return error;
 }
@@ -666,8 +611,6 @@ asmlinkage int sys_symlink(const char * oldname, const char * newname)
 	return error;
 }
 
-/* 将oldinode节点对应的文件链接到newname指向的路径
- */
 static int do_link(struct inode * oldinode, const char * newname)
 {
 	struct inode * dir;
@@ -710,8 +653,6 @@ static int do_link(struct inode * oldinode, const char * newname)
 	return error;
 }
 
-/* 文件链接的函数，软链接，硬链接
- */
 asmlinkage int sys_link(const char * oldname, const char * newname)
 {
 	int error;

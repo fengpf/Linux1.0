@@ -35,7 +35,6 @@ asmlinkage void ret_from_sys_call(void) __asm__("ret_from_sys_call");
 extern int shm_fork(struct task_struct *, struct task_struct *);
 long last_pid=0;
 
-//寻找空闲的task_struct,并返回其索引
 static int find_empty_process(void)
 {
 	int free_task;
@@ -43,31 +42,24 @@ static int find_empty_process(void)
 	int this_user_tasks;
 
 repeat:
-	//限定进程号的最大值
 	if ((++last_pid) & 0xffff8000)
 		last_pid=1;
 	this_user_tasks = 0;
 	tasks_free = 0;
 	free_task = -EAGAIN;
 	i = NR_TASKS;
-	//从反方向开始寻找
 	while (--i > 0) {
 		if (!task[i]) {
-			//如果找到了一个空闲的，则停止寻找
 			free_task = i;
 			tasks_free++;
 			continue;
 		}
-		//如果是当前用户的进程，则增加当前用户的进程数
 		if (task[i]->uid == current->uid)
 			this_user_tasks++;
 		if (task[i]->pid == last_pid || task[i]->pgrp == last_pid ||
 		    task[i]->session == last_pid)
 			goto repeat;
 	}
-	/*剩下的进程必须满足root账户的进程需要，
-	 *并且账户可以开辟的最大进程数不能超过MAX_TASKS_PER_USER 
-	 */
 	if (tasks_free <= MIN_TASKS_LEFT_FOR_ROOT ||
 	    this_user_tasks > MAX_TASKS_PER_USER)
 		if (current->uid)
@@ -137,7 +129,6 @@ asmlinkage int sys_fork(struct pt_regs regs)
 	struct file *f;
 	unsigned long clone_flags = COPYVM | SIGCHLD;
 
-	//从内存当中申请一个task_struct,注意并不是用kmalloc申请的
 	if(!(p = (struct task_struct*)__get_free_page(GFP_KERNEL)))
 		goto bad_fork;
 	nr = find_empty_process();
@@ -145,22 +136,18 @@ asmlinkage int sys_fork(struct pt_regs regs)
 		goto bad_fork_free;
 	task[nr] = p;
 	*p = *current;
-	p->did_exec = 0;    /* 默认是没有被execve族函数执行 */
+	p->did_exec = 0;
 	p->kernel_stack_page = 0;
 	p->state = TASK_UNINTERRUPTIBLE;
 	p->flags &= ~(PF_PTRACED|PF_TRACESYS);
 	p->pid = last_pid;
 	p->swappable = 1;
-	/*刚被创建时，父进程和创建该进程的进程是同一个进程，为啥要区分开，是因为
-	 *进程的父进程被杀死后，就将该进程的父进程设置为1号进程*/
 	p->p_pptr = p->p_opptr = current;
 	p->p_cptr = NULL;
-	//设置task_struct进程的链表关系
 	SET_LINKS(p);
 	p->signal = 0;
 	p->it_real_value = p->it_virt_value = p->it_prof_value = 0;
 	p->it_real_incr = p->it_virt_incr = p->it_prof_incr = 0;
-    /* 子进程的进程组领导进程属性不继承 */
 	p->leader = 0;		/* process leadership doesn't inherit */
 	p->utime = p->stime = 0;
 	p->cutime = p->cstime = 0;
@@ -212,10 +199,6 @@ asmlinkage int sys_fork(struct pt_regs regs)
 		goto bad_fork_cleanup;
 	if (clone_flags & COPYFD) {
 		for (i=0; i<NR_OPEN;i++)
-			/* 注意此时p->filp任然是父进程的文件指针,copy_fd函数就是
-			 * 将父进程的文件指针拷贝一份过来，注意struct_file的文件计数
-			 * 和inode的文件计数
-			 */
 			if ((f = p->filp[i]) != NULL)
 				p->filp[i] = copy_fd(f);
 	} else {
@@ -223,7 +206,6 @@ asmlinkage int sys_fork(struct pt_regs regs)
 			if ((f = p->filp[i]) != NULL)
 				f->f_count++;
 	}
-    /* 在同一个进程在fork之后，同时增加pwd,root,executable的引用计数 */
 	if (current->pwd)
 		current->pwd->i_count++;
 	if (current->root)

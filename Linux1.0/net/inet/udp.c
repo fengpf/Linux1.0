@@ -92,10 +92,6 @@ print_udp(struct udphdr *uh)
  * header points to the first 8 bytes of the udp header.  We need
  * to find the appropriate port.
  */
-/* udp错误处理函数，网络层到传输层的错误处理过程
-  * 如udp协议发送数据时，出现问题，根据相应的反馈来给出 
-  * 错误提示或处理 
-  */
 void
 udp_err(int err, unsigned char *header, unsigned long daddr,
 	unsigned long saddr, struct inet_protocol *protocol)
@@ -138,7 +134,7 @@ sport=%d,dport=%d", err, header, daddr, saddr, protocol, (int)th->source,(int)th
   sk->error_report(sk);
 }
 
-/* udp协议的数据校验函数，就是产生校验数据 */
+
 static unsigned short
 udp_check(struct udphdr *uh, int len,
 	  unsigned long saddr, unsigned long daddr)
@@ -204,7 +200,6 @@ udp_check(struct udphdr *uh, int len,
 }
 
 
-/* udp数据校验 */
 static void
 udp_send_check(struct udphdr *uh, unsigned long saddr, 
 	       unsigned long daddr, int len, struct sock *sk)
@@ -216,7 +211,7 @@ udp_send_check(struct udphdr *uh, unsigned long saddr,
   if (uh->check == 0) uh->check = 0xffff;
 }
 
-/* udp发送数据函数 */
+
 static int
 udp_send(struct sock *sk, struct sockaddr_in *sin,
 	 unsigned char *from, int len)
@@ -246,11 +241,9 @@ udp_send(struct sock *sk, struct sockaddr_in *sin,
   skb->mem_len  = size;
   skb->sk       = NULL;	/* to avoid changing sk->saddr */
   skb->free     = 1;
-  /* 不知包中mac地址 */
   skb->arp      = 0;
 
   /* Now build the IP and MAC header. */
-  /* buff指向skb中数据的起始位置 */
   buff = skb->data;
   saddr = 0;
   dev = NULL;
@@ -268,7 +261,6 @@ udp_send(struct sock *sk, struct sockaddr_in *sin,
   saddr = dev->pa_addr;
   DPRINTF((DBG_UDP, "UDP: >> MAC+IP len=%d\n", tmp));
 
-  /* 设置skb中有效数据长度 */
   skb->len = tmp + sizeof(struct udphdr) + len;	/* len + UDP + IP + MAC */
   skb->dev = dev;
 #ifdef OLD
@@ -288,7 +280,6 @@ udp_send(struct sock *sk, struct sockaddr_in *sin,
   }
 
   /* Fill in the UDP header. */
-  /* 填充udp的头 */
   uh = (struct udphdr *) buff;
   uh->len = htons(len + sizeof(struct udphdr));
   uh->source = sk->dummy_th.source;
@@ -302,7 +293,6 @@ udp_send(struct sock *sk, struct sockaddr_in *sin,
   udp_send_check(uh, saddr, sin->sin_addr.s_addr, skb->len - tmp, sk);
 
   /* Send the datagram to the interface. */
-  /* 发送数据包，这里数据就到了ip层了 */
   sk->prot->queue_xmit(sk, dev, skb, 1);
 
   return(len);
@@ -339,7 +329,6 @@ udp_sendto(struct sock *sk, unsigned char *from, int len, int noblock,
 	if (sin.sin_port == 0) 
 		return(-EINVAL);
   } else {
-    /* 判断sk的状态 */
 	if (sk->state != TCP_ESTABLISHED) return(-EINVAL);
 	sin.sin_family = AF_INET;
 	sin.sin_port = sk->dummy_th.dest;
@@ -366,7 +355,7 @@ udp_write(struct sock *sk, unsigned char *buff, int len, int noblock,
   return(udp_sendto(sk, buff, len, noblock, flags, NULL, 0));
 }
 
-/* ioctl系统调用udp的具体实现 */
+
 int
 udp_ioctl(struct sock *sk, int cmd, unsigned long arg)
 {
@@ -484,13 +473,9 @@ udp_recvfrom(struct sock *sk, unsigned char *to, int len,
   er=verify_area(VERIFY_WRITE,to,len);
   if(er)
   	return er;
-
-  /* 获取接收队列中的一个skb */
   skb=skb_recv_datagram(sk,flags,noblock,&er);
   if(skb==NULL)
   	return er;
-
-  /* 确定实际读取的字节数 */
   copied = min(len, skb->len);
 
   /* FIXME : should use udp header size info value */
@@ -520,9 +505,6 @@ udp_read(struct sock *sk, unsigned char *buff, int len, int noblock,
 }
 
 
-/* udp协议的连接函数，在udp的连接函数当中并没有像tcp那样
- * 去发送数据包进行连接而是直接就是更改状态为TCP_ESTABLISHED
- */
 int
 udp_connect(struct sock *sk, struct sockaddr_in *usin, int addr_len)
 {
@@ -537,8 +519,6 @@ udp_connect(struct sock *sk, struct sockaddr_in *usin, int addr_len)
   	return er;
 
   memcpy_fromfs(&sin, usin, sizeof(sin));
-
-  /* 要是AF_INET协议族 */
   if (sin.sin_family && sin.sin_family != AF_INET) 
   	return(-EAFNOSUPPORT);
 
@@ -552,7 +532,6 @@ udp_connect(struct sock *sk, struct sockaddr_in *usin, int addr_len)
 }
 
 
-/* udp连接关闭 */
 static void
 udp_close(struct sock *sk, int timeout)
 {
@@ -564,7 +543,6 @@ udp_close(struct sock *sk, int timeout)
 
 
 /* All we need to do is get the socket, and then do a checksum. */
-/* udp协议的接收函数，和tcp的tcp_rcv函数功能相同 */
 int
 udp_rcv(struct sk_buff *skb, struct device *dev, struct options *opt,
 	unsigned long daddr, unsigned short len,
@@ -573,9 +551,7 @@ udp_rcv(struct sk_buff *skb, struct device *dev, struct options *opt,
   struct sock *sk;
   struct udphdr *uh;
 
-  /* 获取udp协议的头部 */
   uh = (struct udphdr *) skb->h.uh;
-  /* 获取udp协议上服务器绑定的套接字 */
   sk = get_sock(&udp_prot, uh->dest, saddr, uh->source, daddr);
   if (sk == NULL) 
   {
@@ -610,7 +586,6 @@ udp_rcv(struct sk_buff *skb, struct device *dev, struct options *opt,
 
 
   /* Charge it to the socket. */
-  /* 判断是否超过了接收缓冲的大小 */
   if (sk->rmem_alloc + skb->mem_len >= sk->rcvbuf) 
   {
 	skb->sk = NULL;
@@ -630,7 +605,6 @@ udp_rcv(struct sk_buff *skb, struct device *dev, struct options *opt,
 
   skb->len = len - sizeof(*uh);
 
-  /* 通知进程数据已经接收到 */
   if (!sk->dead) 
   	sk->data_ready(sk,skb->len);
   	

@@ -123,7 +123,6 @@ static int arp_proxies=0;	/* So we can avoid the proxy arp
 				   overhead with the usual case of
 				   no proxy arps */
 
-/* 收到的arp缓存队列 */
 struct sk_buff * volatile arp_q = NULL;
 
 static struct arp_table *arp_lookup(unsigned long addr);
@@ -153,7 +152,6 @@ eth_aprint(unsigned char *ptr, int len)
 
 
 /* Dump an ARP packet. Not complete yet for non-Ethernet packets. */
-/* 打印arp信息 */
 static void
 arp_print(struct arphdr *arp)
 {
@@ -208,7 +206,6 @@ arp_send_q(void)
   struct sk_buff *volatile work_q;
   cli();
   work_q = arp_q;
-  /* 设置新链表的head为arp_q */
   skb_new_list_head(&work_q);
   arp_q = NULL;
   sti();
@@ -259,7 +256,6 @@ static struct timer_list arp_timer;
 
 static void arp_queue_ticker(unsigned long data);
 
-/* 重新设置时钟，时钟的回调函数为arp_queue_ticker */
 static void arp_queue_kick(void)
 {
 	arp_timer.expires = 500;	/* 5 seconds */

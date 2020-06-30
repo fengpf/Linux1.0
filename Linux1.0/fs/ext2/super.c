@@ -264,7 +264,6 @@ static int parse_options (char * options, unsigned long * sb_block,
 	return 1;
 }
 
-/**/
 static void ext2_setup_super (struct super_block * sb,
 			      struct ext2_super_block * es)
 {
@@ -306,7 +305,6 @@ static void ext2_setup_super (struct super_block * sb,
 	}
 }
 
-/* 检查超级块块组描述符 */
 static int ext2_check_descriptors (struct super_block * sb)
 {
 	int i;
@@ -316,13 +314,10 @@ static int ext2_check_descriptors (struct super_block * sb)
 
 	ext2_debug ("Checking group descriptors");
 
-	/* 循环处理块组中的所有组,block总是指向当前块组的第一个块号 */
 	for (i = 0; i < sb->u.ext2_sb.s_groups_count; i++)
 	{
-		/* 正好够存放在一个数据块中，则将该块中所有块描述符取出 */
 		if ((i % EXT2_DESC_PER_BLOCK(sb)) == 0)
 			gdp = (struct ext2_group_desc *) sb->u.ext2_sb.s_group_desc[desc_block++]->b_data;
-		/* 如果块位图所在的块号，不在当前块组中，则出错 */
 		if (gdp->bg_block_bitmap < block ||
 		    gdp->bg_block_bitmap >= block + EXT2_BLOCKS_PER_GROUP(sb))
 		{
@@ -332,8 +327,6 @@ static int ext2_check_descriptors (struct super_block * sb)
 				    i, gdp->bg_block_bitmap);
 			return 0;
 		}
-
-		/* 如果inode位图所在的块号，不在当前块组中，则出错  */
 		if (gdp->bg_inode_bitmap < block ||
 		    gdp->bg_inode_bitmap >= block + EXT2_BLOCKS_PER_GROUP(sb))
 		{
@@ -353,22 +346,17 @@ static int ext2_check_descriptors (struct super_block * sb)
 				    i, gdp->bg_inode_table);
 			return 0;
 		}
-		/* 没扫描一个块组，block则增加一个块组中块的数量 */
 		block += EXT2_BLOCKS_PER_GROUP(sb);
-		/* 处理下一个块组 */
 		gdp++;
 	}
 	return 1;
 }
 
-/* 读取ext2文件系统的超级块
- */
 struct super_block * ext2_read_super (struct super_block * sb, void * data,
 				      int silent)
 {
 	struct buffer_head * bh;
 	struct ext2_super_block * es;
-        /* 注意超级块存放在设备的第一块 */
 	unsigned long sb_block = 1;
 	unsigned long logic_sb_block = 1;
 	int dev = sb->s_dev;
@@ -387,10 +375,6 @@ struct super_block * ext2_read_super (struct super_block * sb, void * data,
 
 	lock_super (sb);
 	set_blocksize (dev, BLOCK_SIZE);
-	/* 读取超级块所在扇区，在ext2文件系统中，索引为0的逻辑块是不用的，
-	 * 超级块则存放在索引为1的逻辑块中
-	 *
-	 */
 	if (!(bh = bread (dev, sb_block, BLOCK_SIZE))) {
 		sb->s_dev = 0;
 		unlock_super (sb);
@@ -401,7 +385,6 @@ struct super_block * ext2_read_super (struct super_block * sb, void * data,
 	 * Note: s_es must be initialized s_es as soon as possible because
 	 * some ext2 macro-instructions depend on its value
 	 */
-	/* 从高速缓存中获取ext2的超级块数据 */
 	es = (struct ext2_super_block *) bh->b_data;
 	sb->u.ext2_sb.s_es = es;
 	sb->s_magic = es->s_magic;
@@ -524,19 +507,14 @@ struct super_block * ext2_read_super (struct super_block * sb, void * data,
 		return NULL;
 	}
 
-	/* 注意它是怎么算的，将所有可用的块数量(减去保留的)除以每组的块数量，然后向上取整 */
 	sb->u.ext2_sb.s_groups_count = (es->s_blocks_count -
 				        es->s_first_data_block +
 				       EXT2_BLOCKS_PER_GROUP(sb) - 1) /
 				       EXT2_BLOCKS_PER_GROUP(sb);
-	/* 初始化组描述符的高速缓存 */
 	for (i = 0; i < EXT2_MAX_GROUP_DESC; i++)
 		sb->u.ext2_sb.s_group_desc[i] = NULL;
-
-	/* 计算组描述符占用的高速缓存的块数 */
 	bh_count = (sb->u.ext2_sb.s_groups_count + EXT2_DESC_PER_BLOCK(sb) - 1) /
 		   EXT2_DESC_PER_BLOCK(sb);
-	/* 如果超过最大支持，则出错 */
 	if (bh_count > EXT2_MAX_GROUP_DESC) {
 		sb->s_dev = 0;
 		unlock_super (sb);
@@ -544,8 +522,6 @@ struct super_block * ext2_read_super (struct super_block * sb, void * data,
 		printk ("EXT2-fs: file system is too big\n");
 		return NULL;
 	}
-
-	/* 开始读取组描述符到高速缓存 */
 	for (i = 0; i < bh_count; i++) {
 		sb->u.ext2_sb.s_group_desc[i] = bread (dev, logic_sb_block + i + 1,
 						       sb->s_blocksize);
@@ -559,7 +535,6 @@ struct super_block * ext2_read_super (struct super_block * sb, void * data,
 			return NULL;
 		}
 	}
-	/* 检查块组是否正确 */
 	if (!ext2_check_descriptors (sb)) {
 		sb->s_dev = 0;
 		unlock_super (sb);
@@ -582,9 +557,7 @@ struct super_block * ext2_read_super (struct super_block * sb, void * data,
 	 * set up enough so that it can read an inode
 	 */
 	sb->s_dev = dev;
-	/*设置ext2超级块的操作函数*/
 	sb->s_op = &ext2_sops;
-	/* 获取/对应的inode，该inode的ino是2 */
 	if (!(sb->s_mounted = iget (sb, EXT2_ROOT_INO))) {
 		sb->s_dev = 0;
 		for (i = 0; i < EXT2_MAX_GROUP_DESC; i++)
@@ -624,7 +597,6 @@ static void ext2_commit_super (struct super_block * sb,
  * set s_state to EXT2_VALID_FS after some corrections.
  */
 
-/* 清楚超级块的脏标记 */
 void ext2_write_super (struct super_block * sb)
 {
 	struct ext2_super_block * es;
@@ -643,7 +615,6 @@ void ext2_write_super (struct super_block * sb)
 	sb->s_dirt = 0;
 }
 
-/* 判断超级块是否可以重新挂载 */
 int ext2_remount (struct super_block * sb, int * flags, char * data)
 {
 	struct ext2_super_block * es;
@@ -685,7 +656,6 @@ int ext2_remount (struct super_block * sb, int * flags, char * data)
 	return 0;
 }
 
-/* 获取超级块文件系统的基本信息 */
 void ext2_statfs (struct super_block * sb, struct statfs * buf)
 {
 	long tmp;

@@ -17,27 +17,17 @@ extern int fcntl_getlk(unsigned int, struct flock *);
 extern int fcntl_setlk(unsigned int, unsigned int, struct flock *);
 extern int sock_fcntl (struct file *, unsigned int cmd, unsigned long arg);
 
-
-/* 复制文件句柄
- * fd是要被复制的句柄
- * arg是从哪个文件句柄查找可以复制到的文件句柄
- * 复制成功之后会有两个(也可能是多个dup多次)
- * 对应的文件指针，而指针指向的内存区域相同，
- * 并且引用计数会加1
- */
 static int dupfd(unsigned int fd, unsigned int arg)
 {
 	if (fd >= NR_OPEN || !current->filp[fd])
 		return -EBADF;
 	if (arg >= NR_OPEN)
 		return -EINVAL;
-	/*找到一个可用的fd*/
 	while (arg < NR_OPEN)
 		if (current->filp[arg])
 			arg++;
 		else
 			break;
-	/*如果超过进程可以打开的最大文件数，则失败*/
 	if (arg >= NR_OPEN)
 		return -EMFILE;
 	FD_CLR(arg, &current->close_on_exec);
@@ -45,7 +35,6 @@ static int dupfd(unsigned int fd, unsigned int arg)
 	return arg;
 }
 
-/* 指定复制后的文件描述符，如果该文件描述符已经打开，则将其关闭 */
 asmlinkage int sys_dup2(unsigned int oldfd, unsigned int newfd)
 {
 	if (oldfd >= NR_OPEN || !current->filp[oldfd])
@@ -81,9 +70,9 @@ asmlinkage int sys_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
 	if (fd >= NR_OPEN || !(filp = current->filp[fd]))
 		return -EBADF;
 	switch (cmd) {
-		case F_DUPFD:   /* 复制一个文件描述符 */
+		case F_DUPFD:
 			return dupfd(fd,arg);
-		case F_GETFD:   /* 判断文件描述符是不是在进程的close_on_exec当中 */
+		case F_GETFD:
 			return FD_ISSET(fd, &current->close_on_exec);
 		case F_SETFD:
 			if (arg&1)
@@ -91,9 +80,9 @@ asmlinkage int sys_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg)
 			else
 				FD_CLR(fd, &current->close_on_exec);
 			return 0;
-		case F_GETFL:   /* 返回文件的标记 */
+		case F_GETFL:
 			return filp->f_flags;
-		case F_SETFL:   /* 设置文件标记 */
+		case F_SETFL:
 			filp->f_flags &= ~(O_APPEND | O_NONBLOCK);
 			filp->f_flags |= arg & (O_APPEND | O_NONBLOCK);
 			return 0;
